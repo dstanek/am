@@ -2,6 +2,7 @@ mod cli;
 mod config;
 mod error;
 mod session;
+mod tmux;
 mod worktree;
 
 use std::io::Write;
@@ -26,18 +27,12 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             cmd_start(&slug, agent.as_deref(), editor.as_deref(), no_container)
         }
         Commands::List => cmd_list(),
-        Commands::Attach { slug } => {
-            eprintln!("am attach {slug} (not yet implemented)");
-            Ok(())
-        }
+        Commands::Attach { slug } => cmd_attach(&slug),
         Commands::Done { slug, message: _ } => {
             eprintln!("am done {slug} (not yet implemented)");
             Ok(())
         }
-        Commands::Run { slug, agent } => {
-            eprintln!("am run {slug} {agent} (not yet implemented)");
-            Ok(())
-        }
+        Commands::Run { slug, agent } => cmd_run(&slug, &agent),
         Commands::Clean { slug, force } => cmd_clean(&slug, force),
     }
 }
@@ -96,11 +91,32 @@ fn cmd_start(slug: &str, _agent: Option<&str>, _editor: Option<&str>, _no_contai
 
     let worktree_path = worktree::create_git_worktree(slug, &repo_root)?;
 
+    let window_name = format!("am-{slug}");
+
+    if tmux::is_in_tmux() {
+        // Load project config for split settings
+        let project_config_path = repo_root.join(".am").join("config.toml");
+        let cfg = config::load_with_global(
+            config::global_config_path().as_deref(),
+            Some(&project_config_path),
+        )?;
+
+        tmux::create_window(&window_name, &worktree_path)
+            .map_err(|e| anyhow::anyhow!(
+                "{e}\nHint: a window named '{window_name}' may already exist — run 'am clean {slug}' first"
+            ))?;
+        tmux::split_window(&window_name, &worktree_path, &cfg.tmux.split)?;
+        tmux::select_pane(&tmux::get_pane_id(&window_name, 0))?;
+        tmux::select_window(&window_name)?;
+    } else {
+        println!("Note: not inside tmux — no window opened. Run 'am attach {slug}' from inside tmux to open one.");
+    }
+
     let new_session = session::Session {
         slug: slug.to_string(),
         branch: format!("am/{slug}"),
         worktree_path: worktree_path.clone(),
-        tmux_window: format!("am-{slug}"),
+        tmux_window: window_name,
         agent_pane: format!("am-{slug}.0"),
         shell_pane: format!("am-{slug}.1"),
         created_at: chrono::Utc::now(),
@@ -126,7 +142,6 @@ fn cmd_list() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // Column widths (with minimums)
     let slug_w = sessions.iter().map(|s| s.slug.len()).max().unwrap_or(4).max(4);
     let path_w = sessions.iter().map(|s| s.worktree_path.display().to_string().len()).max().unwrap_or(8).max(8);
 
@@ -156,6 +171,61 @@ fn cmd_list() -> anyhow::Result<()> {
     Ok(())
 }
 
+// ── am attach ────────────────────────────────────────────────────────────────
+
+fn cmd_attach(slug: &str) -> anyhow::Result<()> {
+    let repo_root = find_repo_root()?;
+    let sessions = session::load_sessions(&repo_root)?;
+
+    let s = session::find_session(&sessions, slug)
+        .ok_or_else(|| error::AmError::SlugNotFound(slug.to_string()))?;
+
+    if !tmux::is_in_tmux() {
+        return Err(error::AmError::NotInTmux.into());
+    }
+
+    let window_name = format!("am-{slug}");
+
+    // Try to switch to an existing window; if it's not there, create it.
+    if tmux::select_window(&window_name).is_err() {
+        let project_config_path = repo_root.join(".am").join("config.toml");
+        let cfg = config::load_with_global(
+            config::global_config_path().as_deref(),
+            Some(&project_config_path),
+        )?;
+        tmux::create_window(&window_name, &s.worktree_path)
+            .map_err(|e| anyhow::anyhow!(
+                "{e}\nHint: a window named '{window_name}' may already exist — run 'am clean {slug}' first"
+            ))?;
+        tmux::split_window(&window_name, &s.worktree_path, &cfg.tmux.split)?;
+        tmux::select_pane(&tmux::get_pane_id(&window_name, 0))?;
+        tmux::select_window(&window_name)?;
+        println!("Opened new window for session '{slug}'.");
+    } else {
+        println!("Attached to session '{slug}'.");
+    }
+    Ok(())
+}
+
+// ── am run ────────────────────────────────────────────────────────────────────
+
+fn cmd_run(slug: &str, agent: &str) -> anyhow::Result<()> {
+    let repo_root = find_repo_root()?;
+    let sessions = session::load_sessions(&repo_root)?;
+
+    let s = session::find_session(&sessions, slug)
+        .ok_or_else(|| error::AmError::SlugNotFound(slug.to_string()))?;
+
+    if !tmux::is_in_tmux() {
+        return Err(error::AmError::NotInTmux.into());
+    }
+
+    tmux::send_keys(&s.agent_pane, agent)?;
+    tmux::select_window(&s.tmux_window)?;
+    println!("Launched '{agent}' in session '{slug}'.");
+    Ok(())
+}
+
 // ── am clean ─────────────────────────────────────────────────────────────────
 
 fn cmd_clean(slug: &str, force: bool) -> anyhow::Result<()> {
@@ -177,7 +247,10 @@ fn cmd_clean(slug: &str, force: bool) -> anyhow::Result<()> {
         }
     }
 
-    // Remove worktree (ignore error if already gone)
+    // Kill tmux window (ignore error — window may not exist)
+    let _ = tmux::kill_window(&format!("am-{slug}"));
+
+    // Remove worktree (ignore error — may already be gone)
     let _ = worktree::remove_git_worktree(slug, &repo_root);
 
     // Remove session record
@@ -192,7 +265,9 @@ fn cmd_clean(slug: &str, force: bool) -> anyhow::Result<()> {
 fn find_repo_root() -> anyhow::Result<PathBuf> {
     let mut dir = std::env::current_dir()?;
     loop {
-        if dir.join(".git").exists() || dir.join(".jj").exists() {
+        // .git in a worktree is a FILE pointing back to the main repo;
+        // only stop when we find it as a DIRECTORY (the actual repo root).
+        if dir.join(".jj").is_dir() || dir.join(".git").is_dir() {
             return Ok(dir);
         }
         match dir.parent() {

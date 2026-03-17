@@ -76,27 +76,27 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 > Split-pane tmux window per session. No agent launch yet — just the environment.
 
-- [ ] **Design**
-  - [ ] Decide pane assignment: `am-<slug>.0` = agent pane, `am-<slug>.1` = shell pane
-  - [ ] Default layout: 50/50 horizontal split; configurable via `TmuxConfig`
-  - [ ] Window naming collision strategy: error + tell user to run `am clean`
-  - [ ] Behaviour when not inside tmux: print worktree path, no error, no tmux ops
+- [x] **Design**
+  - [x] Decide pane assignment: `am-<slug>.0` = agent pane, `am-<slug>.1` = shell pane
+  - [x] Default layout: 50/50 horizontal split; configurable via `TmuxConfig`
+  - [x] Window naming collision strategy: error + tell user to run `am clean`
+  - [x] Behaviour when not inside tmux: print worktree path, no error, no tmux ops
 
-- [ ] **Tests**
-  - [ ] `tmux.rs`: `is_in_tmux()` reads `$TMUX` env var
-  - [ ] `tmux.rs`: each function builds the correct tmux command (inject mock binary path)
-  - [ ] `tmux.rs`: `get_pane_id` returns `"<window>.<index>"`
-  - [ ] `am start` when `$TMUX` not set: succeeds, prints path, does not call tmux
-  - [ ] `am attach` when `$TMUX` not set: returns `NotInTmux` error
+- [x] **Tests**
+  - [x] `tmux.rs`: `is_in_tmux()` reads `$TMUX` env var
+  - [x] `tmux.rs`: each function builds the correct tmux command (inject mock binary path)
+  - [x] `tmux.rs`: `get_pane_id` returns `"<window>.<index>"`
+  - [x] `am start` when `$TMUX` not set: succeeds, prints path, does not call tmux
+  - [x] `am attach` when `$TMUX` not set: returns `NotInTmux` error
 
-- [ ] **Implementation**
-  - [ ] `src/tmux.rs` — `is_in_tmux()`, `create_window()`, `split_window()`, `select_pane()`, `select_window()`, `send_keys()`, `kill_window()`, `get_pane_id()`
-  - [ ] Wire tmux into `am start`: create window → split → select agent pane → switch focus
-  - [ ] `am attach <slug>` — `select_window` to existing session
-  - [ ] `am run <slug> <agent>` — `send_keys` agent command to agent pane, switch focus
-  - [ ] `am clean` — kill tmux window (ignore if not present)
+- [x] **Implementation**
+  - [x] `src/tmux.rs` — `is_in_tmux()`, `create_window()`, `split_window()`, `select_pane()`, `select_window()`, `send_keys()`, `kill_window()`, `get_pane_id()`
+  - [x] Wire tmux into `am start`: create window → split → select agent pane → switch focus
+  - [x] `am attach <slug>` — `select_window` to existing session
+  - [x] `am run <slug> <agent>` — `send_keys` agent command to agent pane, switch focus
+  - [x] `am clean` — kill tmux window (ignore if not present)
 
-- [ ] **UX Review** — `am start feat` opens a correctly split window; `am attach feat` switches to it; `am clean feat` tears it down
+- [x] **UX Review** — `am start feat` opens a correctly split window; `am attach feat` switches to it; `am clean feat` tears it down
 
 ---
 
@@ -367,6 +367,7 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 - [x] **Feature 0: Foundation** — project skeleton, error types, config loading, session state
 - [x] **Feature 1: Git Worktree Management** — `am start`, `am list`, `am clean` with real git worktrees
+- [x] **Feature 2: tmux Integration** — split-pane windows, `am attach` (create-or-attach), `am run`
 
 ---
 
@@ -383,3 +384,5 @@ Track design decisions made during implementation:
 | 5 | Container startup delay | Configurable `startup_delay_ms`, default 500 | Podman |
 | 6 | SELinux `,z` | Linux + Podman only | Podman |
 | 7 | Container name collision | `podman rm -f am-<slug>` before launch, log warning | Podman |
+| 8 | `am attach` when no window | Creates window + split (create-or-attach), not an error | tmux |
+| 9 | Prompt to start tmux session from `am start` | Deferred to v2 | tmux |

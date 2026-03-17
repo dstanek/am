@@ -1,0 +1,235 @@
+use std::path::Path;
+
+use anyhow::Result;
+
+use crate::config::SplitDirection;
+use crate::error::AmError;
+
+/// Returns the tmux binary to use. Tests can override via `AM_TMUX_BIN`.
+fn tmux_bin() -> String {
+    std::env::var("AM_TMUX_BIN").unwrap_or_else(|_| "tmux".to_string())
+}
+
+fn run_tmux(args: &[&str]) -> Result<()> {
+    let output = std::process::Command::new(tmux_bin())
+        .args(args)
+        .output()
+        .map_err(|e| AmError::TmuxError(format!("failed to run tmux: {e}")))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(AmError::TmuxError(if stderr.is_empty() {
+            format!("tmux exited with status {}", output.status)
+        } else {
+            stderr
+        })
+        .into());
+    }
+    Ok(())
+}
+
+/// Returns `true` if the `$TMUX` environment variable is set (i.e. we are
+/// running inside a tmux session).
+pub fn is_in_tmux() -> bool {
+    std::env::var("TMUX").is_ok()
+}
+
+/// `tmux new-window -n <window_name> -c <working_dir>`
+pub fn create_window(window_name: &str, working_dir: &Path) -> Result<()> {
+    run_tmux(&[
+        "new-window",
+        "-n",
+        window_name,
+        "-c",
+        working_dir.to_str().unwrap_or("."),
+    ])
+}
+
+/// Split an existing window.
+/// Horizontal: `tmux split-window -h -c <working_dir> -t <window_name>`
+/// Vertical:   `tmux split-window -v -c <working_dir> -t <window_name>`
+pub fn split_window(window_name: &str, working_dir: &Path, direction: &SplitDirection) -> Result<()> {
+    let flag = match direction {
+        SplitDirection::Horizontal => "-h",
+        SplitDirection::Vertical => "-v",
+    };
+    run_tmux(&[
+        "split-window",
+        flag,
+        "-c",
+        working_dir.to_str().unwrap_or("."),
+        "-t",
+        window_name,
+    ])
+}
+
+/// `tmux select-pane -t <target>`
+pub fn select_pane(target: &str) -> Result<()> {
+    run_tmux(&["select-pane", "-t", target])
+}
+
+/// `tmux select-window -t <window_name>`
+pub fn select_window(window_name: &str) -> Result<()> {
+    run_tmux(&["select-window", "-t", window_name])
+}
+
+/// `tmux send-keys -t <pane_target> "<keys>" Enter`
+pub fn send_keys(pane_target: &str, keys: &str) -> Result<()> {
+    run_tmux(&["send-keys", "-t", pane_target, keys, "Enter"])
+}
+
+/// `tmux kill-window -t <window_name>`
+pub fn kill_window(window_name: &str) -> Result<()> {
+    run_tmux(&["kill-window", "-t", window_name])
+}
+
+/// Returns the pane target string `"<window_name>.<index>"`.
+pub fn get_pane_id(window_name: &str, index: usize) -> String {
+    format!("{window_name}.{index}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+    use std::sync::Mutex;
+    use tempfile::TempDir;
+
+    // Serialize tests that mutate AM_TMUX_BIN / MOCK_TMUX_LOG env vars.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    /// Write a mock tmux script that appends its args to `$MOCK_TMUX_LOG`.
+    fn make_mock_tmux(dir: &Path) -> std::path::PathBuf {
+        let script = dir.join("mock_tmux");
+        std::fs::write(&script, "#!/bin/sh\necho \"$*\" >> \"$MOCK_TMUX_LOG\"\n").unwrap();
+        let mut perms = std::fs::metadata(&script).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&script, perms).unwrap();
+        script
+    }
+
+    struct MockTmux {
+        _tmp: TempDir,
+        log: std::path::PathBuf,
+        _guard: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl MockTmux {
+        fn new() -> Self {
+            let guard = ENV_LOCK.lock().unwrap();
+            let tmp = TempDir::new().unwrap();
+            let log = tmp.path().join("tmux.log");
+            let bin = make_mock_tmux(tmp.path());
+            std::env::set_var("AM_TMUX_BIN", &bin);
+            std::env::set_var("MOCK_TMUX_LOG", &log);
+            Self { _tmp: tmp, log, _guard: guard }
+        }
+
+        fn captured(&self) -> String {
+            std::fs::read_to_string(&self.log).unwrap_or_default()
+        }
+    }
+
+    impl Drop for MockTmux {
+        fn drop(&mut self) {
+            std::env::remove_var("AM_TMUX_BIN");
+            std::env::remove_var("MOCK_TMUX_LOG");
+        }
+    }
+
+    // ── is_in_tmux ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn is_in_tmux_true_when_tmux_set() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        std::env::set_var("TMUX", "/tmp/tmux-1000/default,12345,0");
+        assert!(is_in_tmux());
+        std::env::remove_var("TMUX");
+    }
+
+    #[test]
+    fn is_in_tmux_false_when_tmux_not_set() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        std::env::remove_var("TMUX");
+        assert!(!is_in_tmux());
+    }
+
+    // ── get_pane_id ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn get_pane_id_formats_correctly() {
+        assert_eq!(get_pane_id("am-feat", 0), "am-feat.0");
+        assert_eq!(get_pane_id("am-feat", 1), "am-feat.1");
+        assert_eq!(get_pane_id("am-my-session", 2), "am-my-session.2");
+    }
+
+    // ── command-building tests ────────────────────────────────────────────────
+
+    #[test]
+    fn create_window_sends_correct_command() {
+        let mock = MockTmux::new();
+        create_window("am-feat", Path::new("/tmp/worktree")).unwrap();
+        let out = mock.captured();
+        assert!(out.contains("new-window"), "expected new-window, got: {out}");
+        assert!(out.contains("-n"), "expected -n flag");
+        assert!(out.contains("am-feat"));
+        assert!(out.contains("/tmp/worktree"));
+    }
+
+    #[test]
+    fn split_window_horizontal_sends_correct_command() {
+        let mock = MockTmux::new();
+        split_window("am-feat", Path::new("/tmp/worktree"), &SplitDirection::Horizontal).unwrap();
+        let out = mock.captured();
+        assert!(out.contains("split-window"));
+        assert!(out.contains("-h"));
+        assert!(out.contains("am-feat"));
+    }
+
+    #[test]
+    fn split_window_vertical_sends_correct_command() {
+        let mock = MockTmux::new();
+        split_window("am-feat", Path::new("/tmp/worktree"), &SplitDirection::Vertical).unwrap();
+        let out = mock.captured();
+        assert!(out.contains("split-window"));
+        assert!(out.contains("-v"));
+    }
+
+    #[test]
+    fn select_pane_sends_correct_command() {
+        let mock = MockTmux::new();
+        select_pane("am-feat.0").unwrap();
+        let out = mock.captured();
+        assert!(out.contains("select-pane"));
+        assert!(out.contains("am-feat.0"));
+    }
+
+    #[test]
+    fn select_window_sends_correct_command() {
+        let mock = MockTmux::new();
+        select_window("am-feat").unwrap();
+        let out = mock.captured();
+        assert!(out.contains("select-window"));
+        assert!(out.contains("am-feat"));
+    }
+
+    #[test]
+    fn send_keys_sends_correct_command() {
+        let mock = MockTmux::new();
+        send_keys("am-feat.0", "claude").unwrap();
+        let out = mock.captured();
+        assert!(out.contains("send-keys"));
+        assert!(out.contains("am-feat.0"));
+        assert!(out.contains("claude"));
+        assert!(out.contains("Enter"));
+    }
+
+    #[test]
+    fn kill_window_sends_correct_command() {
+        let mock = MockTmux::new();
+        kill_window("am-feat").unwrap();
+        let out = mock.captured();
+        assert!(out.contains("kill-window"));
+        assert!(out.contains("am-feat"));
+    }
+}
