@@ -1,0 +1,847 @@
+# Agent Manager (`am`) — Technical Specification
+
+## Overview
+
+`am` (Agent Manager) is a CLI tool written in Rust that manages isolated coding agent sessions.
+Each session gets its own git worktree (or jj workspace), a dedicated tmux window with a
+split-pane layout, and lifecycle notifications via the native OS notification system.
+
+The tool is agent-agnostic: it creates the environment and lets the user launch any agent
+(Claude Code, Codex, Copilot, Aider, etc.) inside it.
+
+---
+
+## Project Setup
+
+### Repository Layout
+
+```
+am/
+├── Cargo.toml
+├── Cargo.lock
+├── README.md
+├── src/
+│   ├── main.rs
+│   ├── cli.rs
+│   ├── config.rs
+│   ├── worktree.rs
+│   ├── tmux.rs
+│   ├── container.rs
+│   ├── notify.rs
+│   ├── session.rs
+│   └── error.rs
+└── tests/
+    ├── worktree_test.rs
+    ├── tmux_test.rs
+    ├── container_test.rs
+    └── session_test.rs
+```
+
+### Cargo.toml Dependencies
+
+```toml
+[package]
+name = "am"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "am"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+git2 = "0.19"
+notify-rust = "4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+anyhow = "1"
+which = "6"
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+tempfile = "3"
+```
+
+---
+
+## Configuration
+
+### Global Config — `~/.config/am/config.toml`
+
+Created automatically on first run with defaults:
+
+```toml
+[defaults]
+vcs = "git"            # "git" | "jj" — auto-detected if not set
+agent = ""             # default agent command, e.g. "claude" (optional)
+editor = ""            # default editor for the shell pane, e.g. "nvim" (optional)
+
+[tmux]
+agent_pane = "left"    # "left" | "right" — which pane gets the agent
+split = "horizontal"   # "horizontal" | "vertical"
+split_percent = 50     # pane size split percentage
+
+[container]
+enabled = true         # default on; use --no-container to override per-run
+runtime = "auto"       # "auto" | "podman" | "docker" — auto prefers podman
+image = ""             # required when container.enabled = true
+agent = ""             # selects built-in auth mount preset (see Agent Auth Presets)
+network = "full"       # "full" | "none"
+env = []               # host env vars to pass through, e.g. ["OPENAI_API_KEY"]
+```
+
+### Project Config — `<repo-root>/.am/config.toml`
+
+Optional. Overrides global config for this repo. Created by `am init`.
+
+```toml
+[defaults]
+vcs = "git"
+agent = "claude"
+editor = "nvim"
+
+[container]
+image = "ghcr.io/myorg/mydevimage:latest"
+agent = "claude"               # activates ~/.claude mount preset
+env = ["ANTHROPIC_API_KEY"]    # any additional pass-through vars
+```
+
+### Session State — `<repo-root>/.am/sessions.json`
+
+Managed automatically. Not user-edited.
+
+```json
+{
+  "sessions": [
+    {
+      "slug": "feat",
+      "branch": "am/feat",
+      "worktree_path": ".am/worktrees/feat",
+      "tmux_window": "am-feat",
+      "agent_pane": "am-feat.0",
+      "shell_pane": "am-feat.1",
+      "created_at": "2025-01-01T00:00:00Z",
+      "status": "active",
+      "container": {
+        "enabled": true,
+        "runtime": "podman",
+        "image": "ghcr.io/myorg/mydevimage:latest",
+        "container_id": "a3f1c29d..."
+      }
+    }
+  ]
+}
+```
+
+`container` is `null` when the session was started with `--no-container`.
+
+### `.gitignore` entry
+
+`am init` appends `.am/` to the repo's `.gitignore`.
+
+---
+
+## Module Specifications
+
+### `error.rs`
+
+Define a unified `AmError` enum using `thiserror`. Variants:
+
+- `NotInRepo` — no git/jj repo detected
+- `NotInTmux` — tmux operations requested but `$TMUX` not set
+- `SlugAlreadyExists(String)` — worktree or session with this slug exists
+- `SlugNotFound(String)` — referenced slug has no active session
+- `WorktreeError(String)` — git2 or git CLI error
+- `TmuxError(String)` — tmux command failed
+- `ContainerRuntimeNotFound` — neither podman nor docker detected on PATH
+- `ContainerImageNotConfigured` — container enabled but `container.image` is empty
+- `ContainerError(String)` — runtime command failed
+- `ConfigError(String)` — config parse/write failure
+- `IoError(#[from] std::io::Error)`
+
+---
+
+### `config.rs`
+
+**Responsibilities:**
+- Load and merge global config + project config (project overrides global)
+- Write default config files if absent
+- Expose a single `Config` struct to the rest of the app
+
+**Functions:**
+
+```rust
+pub fn load() -> anyhow::Result<Config>
+pub fn write_defaults(path: &Path) -> anyhow::Result<()>
+```
+
+**`Config` struct:**
+
+```rust
+pub struct Config {
+    pub vcs: Vcs,          // enum: Git | Jj
+    pub agent: Option<String>,
+    pub editor: Option<String>,
+    pub tmux: TmuxConfig,
+    pub container: ContainerConfig,
+}
+
+pub struct TmuxConfig {
+    pub agent_pane: PaneSide,       // enum: Left | Right
+    pub split: SplitDirection,      // enum: Horizontal | Vertical
+    pub split_percent: u8,          // 1–99, default 50
+}
+
+pub struct ContainerConfig {
+    pub enabled: bool,
+    pub runtime: RuntimePreference, // enum: Auto | Podman | Docker
+    pub image: Option<String>,
+    pub agent: Option<String>,      // selects auth mount preset
+    pub network: NetworkMode,       // enum: Full | None
+    pub env: Vec<String>,           // host env var names to pass through
+}
+```
+
+---
+
+### `worktree.rs`
+
+**Responsibilities:**
+- Detect whether the repo uses git or jj
+- Create a worktree/workspace for a given slug
+- Remove a worktree/workspace for a given slug
+- List existing worktrees/workspaces
+
+**Git implementation:**
+
+```rust
+pub fn create_git_worktree(slug: &str, repo_root: &Path) -> anyhow::Result<PathBuf>
+```
+
+- Target path: `<repo-root>/.am/worktrees/<slug>`
+- Branch: `am/<slug>`
+- Equivalent shell command: `git worktree add .am/worktrees/<slug> -b am/<slug>`
+- If branch `am/<slug>` already exists, use `--track` or error with `SlugAlreadyExists`
+
+```rust
+pub fn remove_git_worktree(slug: &str, repo_root: &Path) -> anyhow::Result<()>
+```
+
+- Equivalent: `git worktree remove .am/worktrees/<slug> --force`
+- Then delete branch: `git branch -D am/<slug>`
+
+**jj implementation:**
+
+```rust
+pub fn create_jj_workspace(slug: &str, repo_root: &Path) -> anyhow::Result<PathBuf>
+```
+
+- Target path: `<repo-root>/.am/worktrees/<slug>`
+- Equivalent: `jj workspace add .am/worktrees/<slug> --name <slug>`
+
+```rust
+pub fn remove_jj_workspace(slug: &str, repo_root: &Path) -> anyhow::Result<()>
+```
+
+- Equivalent: `jj workspace forget <slug>`
+- Then delete the directory
+
+**Detection:**
+
+```rust
+pub fn detect_vcs(repo_root: &Path) -> Vcs
+```
+
+- If `.jj/` directory exists at repo root → `Vcs::Jj`
+- Else if `.git` exists → `Vcs::Git`
+- Else error `NotInRepo`
+
+---
+
+### `tmux.rs`
+
+**Responsibilities:**
+- Detect if running inside tmux
+- Create a new tmux window for a session
+- Split the window into two panes
+- Switch the active tmux view to the session window
+- Send keystrokes to a pane (for launching agents)
+- Kill a tmux window
+
+All tmux operations shell out to the `tmux` binary. Do not use a tmux crate — the CLI
+is stable and universal.
+
+**Functions:**
+
+```rust
+pub fn is_in_tmux() -> bool
+```
+- Returns `true` if `$TMUX` env var is set
+
+```rust
+pub fn create_window(window_name: &str, working_dir: &Path) -> anyhow::Result<()>
+```
+- `tmux new-window -n <window_name> -c <working_dir>`
+
+```rust
+pub fn split_window(window_name: &str, working_dir: &Path, direction: SplitDirection) -> anyhow::Result<()>
+```
+- Horizontal split: `tmux split-window -h -c <working_dir> -t <window_name>`
+- Vertical split: `tmux split-window -v -c <working_dir> -t <window_name>`
+
+```rust
+pub fn select_pane(target: &str) -> anyhow::Result<()>
+```
+- `tmux select-pane -t <target>`
+
+```rust
+pub fn select_window(window_name: &str) -> anyhow::Result<()>
+```
+- `tmux select-window -t <window_name>`
+
+```rust
+pub fn send_keys(pane_target: &str, keys: &str) -> anyhow::Result<()>
+```
+- `tmux send-keys -t <pane_target> "<keys>" Enter`
+
+```rust
+pub fn kill_window(window_name: &str) -> anyhow::Result<()>
+```
+- `tmux kill-window -t <window_name>`
+
+```rust
+pub fn get_pane_id(window_name: &str, index: usize) -> String
+```
+- Returns `"<window_name>.<index>"` — e.g. `"am-feat.0"`
+
+---
+
+### `notify.rs`
+
+**Responsibilities:**
+- Send a native OS notification with a title and body
+
+```rust
+pub fn send(title: &str, body: &str) -> anyhow::Result<()>
+```
+
+Uses `notify-rust`. Example:
+
+```rust
+notify_rust::Notification::new()
+    .summary(title)
+    .body(body)
+    .icon("terminal")
+    .show()?;
+```
+
+Handle gracefully on systems where notifications are unavailable (log a warning, don't panic).
+
+---
+
+### `container.rs`
+
+**Responsibilities:**
+- Detect available container runtime (Podman preferred, Docker fallback)
+- Build the mount and env argument list for a session
+- Launch an interactive container in the agent pane (via `tmux send-keys`)
+- Stop/remove a container when a session is cleaned
+- Resolve agent auth mount presets
+
+---
+
+#### Runtime Detection
+
+```rust
+pub fn detect_runtime(preference: RuntimePreference) -> anyhow::Result<ContainerRuntime>
+```
+
+- If `preference` is `Auto`: check `which podman` first, then `which docker`
+- If `preference` is `Podman` or `Docker`: check only that binary; error `ContainerRuntimeNotFound` if absent
+- Returns a `ContainerRuntime` struct holding the resolved binary path and enum variant
+
+---
+
+#### Mount Resolution
+
+```rust
+pub struct ContainerMounts {
+    pub worktree_host: PathBuf,
+    pub git_host: PathBuf,       // .git dir for git repos; .jj dir for jj repos
+    pub gitconfig_host: PathBuf, // ~/.gitconfig
+    pub ssh_host: PathBuf,       // ~/.ssh
+    pub agent_auth: Option<AgentAuthMount>,
+    pub extra: Vec<(PathBuf, PathBuf, MountMode)>, // (host, container, mode)
+}
+
+pub struct AgentAuthMount {
+    pub host_path: PathBuf,
+    pub container_path: PathBuf, // always read-only
+}
+
+pub enum MountMode { ReadOnly, ReadWrite }
+```
+
+```rust
+pub fn resolve_mounts(
+    slug: &str,
+    repo_root: &Path,
+    vcs: Vcs,
+    agent_preset: Option<&str>,
+) -> anyhow::Result<ContainerMounts>
+```
+
+**Git mount layout inside the container:**
+
+| Host path | Container path | Mode |
+|---|---|---|
+| `.am/worktrees/<slug>` | `/workspace` | read-write |
+| `<repo-root>/.git` | `/mainrepo/.git` | read-write |
+| `~/.gitconfig` | `/root/.gitconfig` | read-only |
+| `~/.ssh` | `/root/.ssh` | read-only |
+
+Git environment variables injected into the container:
+```
+GIT_DIR=/mainrepo/.git/worktrees/<slug>
+GIT_WORK_TREE=/workspace
+```
+
+**jj mount layout inside the container:**
+
+jj resolves its repo by walking up the directory tree looking for `.jj/`. The container
+must mirror enough of the host path structure for this walk to succeed. Mount the worktree
+at a predictable sub-path beneath a synthetic repo root, and place `.jj` at that same root.
+
+| Host path | Container path | Mode |
+|---|---|---|
+| `.am/worktrees/<slug>` | `/mainrepo/.am/worktrees/<slug>` | read-write |
+| `<repo-root>/.jj` | `/mainrepo/.jj` | read-write |
+| `~/.gitconfig` | `/root/.gitconfig` | read-only |
+| `~/.ssh` | `/root/.ssh` | read-only |
+
+Container working directory: `/mainrepo/.am/worktrees/<slug>`
+
+No environment variable injection needed — jj's directory walk handles resolution.
+
+---
+
+#### Agent Auth Presets
+
+Built-in presets activated by `container.agent` in config. Each preset defines a host
+path (expanded from `~`) and a fixed container path, always mounted read-only.
+
+| Preset key | Host path | Container path | Notes |
+|---|---|---|---|
+| `claude` | `~/.claude` | `/root/.claude` | Claude Code session + credentials |
+| `codex` | _(none — env var only)_ | — | Uses `OPENAI_API_KEY` pass-through |
+| `copilot` | `~/.config/github-copilot` | `/root/.config/github-copilot` | GitHub Copilot CLI |
+| `gemini` | `~/.gemini` | `/root/.gemini` | Gemini CLI |
+| `aider` | _(none — env var only)_ | — | Uses `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` |
+
+If `container.agent` is set to an unrecognised value, log a warning and proceed without
+an auth mount (the user's `container.env` pass-through may still handle it).
+
+```rust
+pub fn resolve_agent_auth_mount(agent_preset: &str) -> Option<AgentAuthMount>
+```
+
+---
+
+#### Building the Run Command
+
+```rust
+pub fn build_run_command(
+    runtime: &ContainerRuntime,
+    image: &str,
+    mounts: &ContainerMounts,
+    env_passthrough: &[String],
+    extra_env: &[(&str, &str)],  // e.g. GIT_DIR, GIT_WORK_TREE
+    network: NetworkMode,
+    working_dir: &str,
+    container_name: &str,
+) -> Vec<String>
+```
+
+Produces a command of the form:
+
+```
+podman run --rm -it \
+  --name am-<slug> \
+  -v /host/worktree:/workspace:rw,z \
+  -v /host/.git:/mainrepo/.git:rw,z \
+  -v ~/.gitconfig:/root/.gitconfig:ro,z \
+  -v ~/.ssh:/root/.ssh:ro,z \
+  -v ~/.claude:/root/.claude:ro,z \
+  -e GIT_DIR=/mainrepo/.git/worktrees/<slug> \
+  -e GIT_WORK_TREE=/workspace \
+  -e ANTHROPIC_API_KEY \
+  --workdir /workspace \
+  <image>
+```
+
+The `,z` SELinux label suffix is appended on Linux when Podman is in use (required for
+rootless Podman on SELinux systems). On macOS or with Docker, omit it.
+
+`--network none` is appended when `network = "none"`.
+
+---
+
+#### Container Lifecycle
+
+```rust
+pub fn stop_container(runtime: &ContainerRuntime, container_name: &str) -> anyhow::Result<()>
+```
+
+- `podman stop am-<slug>` (or docker)
+- Ignore error if container is already stopped
+
+```rust
+pub fn remove_container(runtime: &ContainerRuntime, container_name: &str) -> anyhow::Result<()>
+```
+
+- `podman rm -f am-<slug>`
+- Called during `am clean`
+
+---
+
+#### Integration with tmux
+
+`container.rs` does not call tmux directly. It returns the fully assembled command string.
+`tmux.rs` `send_keys` delivers it to the agent pane. This keeps the modules decoupled.
+
+The command sent to the agent pane will be the full `podman run ...` invocation. The
+container starts interactively, so the agent pane becomes the container shell. If
+`config.agent` is also set, a second `send_keys` call sends the agent launch command
+after the container starts (with a short configurable delay, default 500ms).
+
+---
+
+#### `--no-container` flag
+
+Added to `am start` in `cli.rs`:
+
+```rust
+/// Disable container isolation for this session (overrides config)
+#[arg(long)]
+no_container: bool,
+```
+
+When `--no-container` is passed, `container.enabled` is treated as `false` for this
+invocation only. The session record stores `container: null`.
+
+---
+
+### `session.rs`
+
+**Responsibilities:**
+- Load and save `sessions.json`
+- CRUD operations on `Session` records
+- Find session by slug
+
+```rust
+pub struct Session {
+    pub slug: String,
+    pub branch: String,
+    pub worktree_path: PathBuf,
+    pub tmux_window: String,
+    pub agent_pane: String,
+    pub shell_pane: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub status: SessionStatus,           // enum: Active | Done
+    pub container: Option<SessionContainer>,
+}
+
+pub struct SessionContainer {
+    pub runtime: String,                 // "podman" | "docker"
+    pub image: String,
+    pub container_id: Option<String>,    // populated after container starts
+}
+
+pub fn load_sessions(repo_root: &Path) -> anyhow::Result<Vec<Session>>
+pub fn save_sessions(repo_root: &Path, sessions: &[Session]) -> anyhow::Result<()>
+pub fn find_session<'a>(sessions: &'a [Session], slug: &str) -> Option<&'a Session>
+pub fn add_session(repo_root: &Path, session: Session) -> anyhow::Result<()>
+pub fn remove_session(repo_root: &Path, slug: &str) -> anyhow::Result<()>
+pub fn update_session_status(repo_root: &Path, slug: &str, status: SessionStatus) -> anyhow::Result<()>
+```
+
+---
+
+### `cli.rs`
+
+Define the full CLI surface using `clap` derive macros.
+
+```rust
+#[derive(Parser)]
+#[command(name = "am", about = "Agent Manager — isolated agent sessions")]
+pub enum Cli {
+    /// Initialize am in the current repo
+    Init,
+
+    /// Start a new agent session
+    Start {
+        slug: String,
+        /// Agent command to launch in the agent pane (overrides config)
+        #[arg(short, long)]
+        agent: Option<String>,
+        /// Editor/command to launch in the shell pane (overrides config)
+        #[arg(short, long)]
+        editor: Option<String>,
+        /// Disable container isolation for this session (overrides config)
+        #[arg(long)]
+        no_container: bool,
+    },
+
+    /// List all active sessions
+    List,
+
+    /// Attach tmux focus to an existing session
+    Attach {
+        slug: String,
+    },
+
+    /// Mark a session as done and send a notification
+    Done {
+        slug: String,
+        /// Optional message to include in the notification
+        #[arg(short, long)]
+        message: Option<String>,
+    },
+
+    /// Launch an agent in an existing session's agent pane
+    Run {
+        slug: String,
+        /// Agent command to run, e.g. "claude", "codex"
+        agent: String,
+    },
+
+    /// Remove worktree, kill tmux window, clean up session
+    Clean {
+        slug: String,
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        force: bool,
+    },
+}
+```
+
+---
+
+### `main.rs`
+
+Wire `cli.rs` to the command implementations. Each command is a function in `main.rs`
+(or a `commands/` submodule if preferred). All commands resolve the repo root first by
+walking up from `cwd` looking for `.git` or `.jj`.
+
+---
+
+## Command Implementations
+
+### `am init`
+
+1. Detect repo root
+2. Create `.am/` directory
+3. Write `.am/config.toml` with defaults
+4. Write `.am/sessions.json` with empty sessions array
+5. Append `.am/` to `.gitignore` if not already present
+6. Print success message
+
+---
+
+### `am start <slug> [--agent <cmd>] [--editor <cmd>] [--no-container]`
+
+1. Detect repo root and load config
+2. Load sessions; error if slug already exists (`SlugAlreadyExists`)
+3. Determine if container mode is active: `config.container.enabled && !no_container`
+4. If container mode active:
+   a. Validate `config.container.image` is set; error `ContainerImageNotConfigured` if not
+   b. Detect container runtime via `container::detect_runtime(config.container.runtime)`
+5. Create worktree/workspace at `.am/worktrees/<slug>` via `worktree.rs`
+6. If `is_in_tmux()`:
+   a. Create new tmux window `am-<slug>` with cwd = worktree path
+   b. Split the window per config (default: 50/50 horizontal split)
+   c. Assign pane targets: `am-<slug>.0` (agent pane), `am-<slug>.1` (shell pane)
+   d. Select agent pane
+   e. If container mode active:
+      - Resolve mounts via `container::resolve_mounts()`
+      - Build run command via `container::build_run_command()`
+      - `send_keys` the full `podman run ...` command to agent pane
+      - If `config.agent` is also set, queue a second `send_keys` after 500ms delay
+        to launch the agent inside the container
+   f. Else (no container):
+      - If `--agent` or `config.agent` is set, `send_keys` to launch agent directly
+   g. If `--editor` or `config.editor` is set, `send_keys` to shell pane
+   h. Switch tmux focus to `am-<slug>` window
+7. If not in tmux: print worktree path and container run command; do not error
+8. Save session record to `sessions.json` (including `container` field or `null`)
+9. Print success summary
+
+---
+
+### `am list`
+
+1. Load sessions from `sessions.json`
+2. Print a table:
+
+```
+SLUG     STATUS    CONTAINER    WORKTREE                         WINDOW      CREATED
+feat     active    podman       .am/worktrees/feat               am-feat     2025-01-01 12:00
+bugfix   done      —            .am/worktrees/bugfix             am-bugfix   2025-01-01 11:00
+```
+
+If no sessions, print `No active sessions. Run 'am start <slug>' to begin.`
+
+---
+
+### `am attach <slug>`
+
+1. Load sessions; error if slug not found
+2. If not in tmux: error `NotInTmux`
+3. `select_window("am-<slug>")`
+4. Print confirmation
+
+---
+
+### `am done <slug> [--message <msg>]`
+
+1. Load sessions; error if slug not found
+2. Update session status to `Done` in `sessions.json`
+3. Send notification:
+   - Title: `"Agent Manager"`
+   - Body: `"✅ <slug> is done"` or `"✅ <slug>: <message>"` if `--message` provided
+4. Print confirmation
+
+---
+
+### `am run <slug> <agent>`
+
+1. Load sessions; error if slug not found
+2. If not in tmux: error `NotInTmux`
+3. `send_keys` the agent command to the session's `agent_pane`
+4. Switch tmux focus to the session window
+
+---
+
+### `am clean <slug> [--force]`
+
+1. Load sessions; error if slug not found
+2. Unless `--force`, prompt: `"Remove worktree and kill tmux window for '<slug>'? [y/N]"`
+3. If session has a container record: `container::stop_container()` then `container::remove_container()` (ignore errors — container may already be gone)
+4. Remove worktree/workspace via `worktree.rs`
+5. Kill tmux window via `tmux.rs` (ignore error if window doesn't exist)
+6. Remove session from `sessions.json`
+7. Print confirmation
+
+---
+
+## Error Handling Philosophy
+
+- All errors bubble up as `anyhow::Result` internally
+- At the top level in `main.rs`, match on error type and print user-friendly messages
+- Never panic in production paths
+- If tmux is unavailable, worktree operations should still succeed and be reported
+- If notifications fail (e.g. no D-Bus on headless Linux), log a warning and continue
+- If container runtime is unavailable and `container.enabled = true`, fail loudly with
+  a clear message and the install URL for Podman rather than silently falling back to no-container
+
+---
+
+## Slug Validation
+
+Slugs must:
+- Be 1–40 characters
+- Contain only `[a-z0-9_-]`
+- Validate at CLI parse time using a clap `value_parser`
+
+---
+
+## Testing Strategy
+
+- Unit test `worktree.rs` using `tempfile` to create real git repos
+- Unit test `session.rs` with temp directories and fixture JSON
+- Unit test `container.rs` mount resolution and command building without invoking a real runtime
+- Mock tmux by checking `$TMUX` and allowing an injectable tmux command path
+- Mock container runtime by allowing an injectable binary path pointing to a test script
+- Integration tests in `tests/` that run full `am start` → `am list` → `am clean` flows
+
+---
+
+## Build & Distribution
+
+- `cargo build --release` produces a single binary at `target/release/am`
+- Target platforms: macOS (arm64 + x86_64), Linux (x86_64), Windows (x86_64)
+- No runtime dependencies; `notify-rust` links statically on Linux against `libdbus`
+  (document the `dbus-devel` / `libdbus-1-dev` build dependency for Linux)
+
+---
+
+## Implementation Order (Suggested Phases)
+
+### Phase 1 — Foundation
+- `error.rs`
+- `config.rs` (load/write defaults, including container config)
+- `worktree.rs` (git only)
+- `session.rs` (load/save/CRUD, including `SessionContainer` field)
+- `am init` command
+- `am start` (worktree creation only, no tmux, no container)
+
+### Phase 2 — tmux Integration
+- `tmux.rs`
+- Wire tmux into `am start`
+- `am attach`
+- `am run`
+
+### Phase 3 — Container Isolation
+- `container.rs` (runtime detection, mount resolution, command building)
+- Wire container into `am start`
+- `am clean` container teardown
+- Unit tests for mount resolution (git and jj paths)
+
+### Phase 4 — Lifecycle
+- `am list` (with container column)
+- `am done` + `notify.rs`
+- Full `am clean`
+
+### Phase 5 — Polish
+- jj workspace support in `worktree.rs` + jj container mount paths
+- Slug validation
+- Global config support
+- Full test coverage
+- README with install + usage + example Dockerfile
+
+### Future (v2)
+- Per-session SSH deploy key generation and injection (replaces `~/.ssh` mount)
+- `am done` auto-trigger via agent pane exit watching
+- Hooks (run user-defined commands on session lifecycle events)
+
+---
+
+## Open Questions / Decisions for Implementation
+
+1. **Window naming collision** — if a tmux window named `am-<slug>` already exists
+   (e.g. from a previous unclean run), should `am start` reuse it, rename it, or error?
+   **Suggested default:** error and tell the user to run `am clean <slug>` first.
+
+2. **Branch base** — should `am/<slug>` branch off the current `HEAD`, a specific base
+   branch, or be configurable? **Suggested default:** current `HEAD`.
+
+3. **Pane layout** — the spec defaults to a 50/50 horizontal split. Should the split
+   ratio be configurable? **Suggested default:** add `split_percent = 50` to `TmuxConfig`.
+
+4. **`am done` trigger** — today `am done` is manual. A future enhancement could watch
+   the agent pane for an exit signal and auto-trigger. Out of scope for v1.
+
+5. **Container startup delay** — after `podman run` is sent to the agent pane, a 500ms
+   delay is used before sending the agent launch command. This is a heuristic.
+   **Suggested default:** make this configurable as `container.startup_delay_ms = 500`.
+
+6. **SELinux `,z` label** — the spec appends `,z` to volume mounts on Linux with Podman.
+   Detection should use `cfg!(target_os = "linux")` and check if the runtime is Podman.
+   macOS never needs `,z`; Docker on Linux usually does not require it either.
+
+7. **Container name collision** — `am start` names the container `am-<slug>`. If a
+   container with that name already exists (e.g. from a crashed session), `podman run`
+   will fail. **Suggested default:** attempt `podman rm -f am-<slug>` before launching,
+   log a warning if it succeeds (indicates an unclean previous run).
