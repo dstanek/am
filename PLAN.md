@@ -46,29 +46,29 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 > Create, list, and remove git worktrees. The core of `am start` and `am clean`.
 
-- [ ] **Design**
-  - [ ] Confirm branch naming: `am/<slug>` off current `HEAD`
-  - [ ] Decide: error on existing branch, or `--track`? (spec suggests error with `SlugAlreadyExists`)
-  - [ ] Target path: `<repo-root>/.am/worktrees/<slug>`
-  - [ ] Slug validation rules: `[a-z0-9_-]`, 1–40 chars — implement as clap `value_parser`
+- [x] **Design**
+  - [x] Confirm branch naming: `am/<slug>` off current `HEAD`
+  - [x] Decide: error on existing branch, or `--track`? (spec suggests error with `SlugAlreadyExists`)
+  - [x] Target path: `<repo-root>/.am/worktrees/<slug>`
+  - [x] Slug validation rules: `[a-z0-9_-]`, 1–40 chars — implement as clap `value_parser`
 
-- [ ] **Tests**
-  - [ ] `worktree.rs`: `create_git_worktree` creates branch and directory in a temp repo
-  - [ ] `worktree.rs`: duplicate slug returns `SlugAlreadyExists`
-  - [ ] `worktree.rs`: `remove_git_worktree` removes worktree and branch
-  - [ ] `worktree.rs`: `detect_vcs` returns `Git` for a `.git` repo
-  - [ ] `worktree.rs`: `detect_vcs` returns error when not in a repo
-  - [ ] Slug validation rejects invalid characters and lengths
+- [x] **Tests**
+  - [x] `worktree.rs`: `create_git_worktree` creates branch and directory in a temp repo
+  - [x] `worktree.rs`: duplicate slug returns `SlugAlreadyExists`
+  - [x] `worktree.rs`: `remove_git_worktree` removes worktree and branch
+  - [x] `worktree.rs`: `detect_vcs` returns `Git` for a `.git` repo
+  - [x] `worktree.rs`: `detect_vcs` returns error when not in a repo
+  - [x] Slug validation rejects invalid characters and lengths
 
-- [ ] **Implementation**
-  - [ ] `src/worktree.rs` — `detect_vcs()`, `create_git_worktree()`, `remove_git_worktree()`
-  - [ ] `am init` command — create `.am/`, write default config, write empty `sessions.json`, append `.am/` to `.gitignore`
-  - [ ] `am start <slug>` — worktree creation only (no tmux, no container)
-  - [ ] `am list` — tabular output from `sessions.json`; empty state message
-  - [ ] `am clean <slug> [--force]` — remove worktree, remove session record, confirmation prompt
-  - [ ] Slug validation wired into clap
+- [x] **Implementation**
+  - [x] `src/worktree.rs` — `detect_vcs()`, `create_git_worktree()`, `remove_git_worktree()`
+  - [x] `am init` command — create `.am/`, write default config, write empty `sessions.json`, append `.am/` to `.gitignore`
+  - [x] `am start <slug>` — worktree creation only (no tmux, no container)
+  - [x] `am list` — tabular output from `sessions.json`; empty state message
+  - [x] `am clean <slug> [--force]` — remove worktree, remove session record, confirmation prompt
+  - [x] Slug validation wired into clap
 
-- [ ] **UX Review** — `am init` → `am start feat` → `am list` → `am clean feat` full cycle feels right
+- [x] **UX Review** — `am init` → `am start feat` → `am list` → `am clean feat` full cycle feels right
 
 ---
 
@@ -366,6 +366,7 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 ## Completed Features
 
 - [x] **Feature 0: Foundation** — project skeleton, error types, config loading, session state
+- [x] **Feature 1: Git Worktree Management** — `am start`, `am list`, `am clean` with real git worktrees
 
 ---
 
