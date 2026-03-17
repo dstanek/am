@@ -17,28 +17,28 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 > Project skeleton, error types, config loading, and session state. Everything else builds on this.
 
-- [ ] **Design**
-  - [ ] Finalize `Cargo.toml` dependencies and workspace layout
-  - [ ] Review `AmError` variants; add any missing from the spec
-  - [ ] Clarify config merge precedence (global → project → CLI flags)
-  - [ ] Document `.am/` directory structure decisions
+- [x] **Design**
+  - [x] Finalize `Cargo.toml` dependencies and workspace layout
+  - [x] Review `AmError` variants; add any missing from the spec
+  - [x] Clarify config merge precedence (global → project → CLI flags)
+  - [x] Document `.am/` directory structure decisions
 
-- [ ] **Tests**
-  - [ ] `config.rs`: load defaults when no config file exists
-  - [ ] `config.rs`: project config overrides global config fields
-  - [ ] `session.rs`: add/find/remove/update sessions in `sessions.json`
-  - [ ] `session.rs`: missing file returns empty session list
-  - [ ] `error.rs`: each error variant formats correctly
+- [x] **Tests**
+  - [x] `config.rs`: load defaults when no config file exists
+  - [x] `config.rs`: project config overrides global config fields
+  - [x] `session.rs`: add/find/remove/update sessions in `sessions.json`
+  - [x] `session.rs`: missing file returns empty session list
+  - [x] `error.rs`: each error variant formats correctly
 
-- [ ] **Implementation**
-  - [ ] `Cargo.toml` with all dependencies (`clap`, `git2`, `serde`, `toml`, `anyhow`, `thiserror`, `which`, `chrono`, `notify-rust`)
-  - [ ] `src/error.rs` — `AmError` enum with all variants
-  - [ ] `src/config.rs` — `Config`, `TmuxConfig`, `ContainerConfig` structs; `load()` and `write_defaults()`
-  - [ ] `src/session.rs` — `Session`, `SessionContainer` structs; full CRUD functions
-  - [ ] `src/main.rs` — minimal entry point wiring
-  - [ ] `src/cli.rs` — full CLI surface defined with clap (all commands stubbed)
+- [x] **Implementation**
+  - [x] `Cargo.toml` with all dependencies (`clap`, `git2`, `serde`, `toml`, `anyhow`, `thiserror`, `which`, `chrono`, `notify-rust`)
+  - [x] `src/error.rs` — `AmError` enum with all variants
+  - [x] `src/config.rs` — `Config`, `TmuxConfig`, `ContainerConfig` structs; `load()` and `write_defaults()`
+  - [x] `src/session.rs` — `Session`, `SessionContainer` structs; full CRUD functions
+  - [x] `src/main.rs` — minimal entry point wiring
+  - [x] `src/cli.rs` — full CLI surface defined with clap (all commands stubbed)
 
-- [ ] **UX Review** — `am --help` shows all commands cleanly; config file created on first run
+- [x] **UX Review** — `am --help` shows all commands cleanly; config file created on first run
 
 ---
 
@@ -365,7 +365,7 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 ## Completed Features
 
-_(Move feature headers here after user sign-off)_
+- [x] **Feature 0: Foundation** — project skeleton, error types, config loading, session state
 
 ---
 
