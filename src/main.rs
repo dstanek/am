@@ -1,5 +1,6 @@
 mod cli;
 mod config;
+mod container;
 mod error;
 mod session;
 mod tmux;
@@ -81,7 +82,7 @@ fn cmd_init() -> anyhow::Result<()> {
 
 // ── am start ──────────────────────────────────────────────────────────────────
 
-fn cmd_start(slug: &str, _agent: Option<&str>, _editor: Option<&str>, _no_container: bool) -> anyhow::Result<()> {
+fn cmd_start(slug: &str, _agent: Option<&str>, _editor: Option<&str>, no_container: bool) -> anyhow::Result<()> {
     let repo_root = find_repo_root()?;
     let sessions = session::load_sessions(&repo_root)?;
 
@@ -89,25 +90,83 @@ fn cmd_start(slug: &str, _agent: Option<&str>, _editor: Option<&str>, _no_contai
         return Err(error::AmError::SlugAlreadyExists(slug.to_string()).into());
     }
 
-    let worktree_path = worktree::create_git_worktree(slug, &repo_root)?;
+    // Load config
+    let project_config_path = repo_root.join(".am").join("config.toml");
+    let cfg = config::load_with_global(
+        config::global_config_path().as_deref(),
+        Some(&project_config_path),
+    )?;
 
+    // Resolve container settings
+    let use_container = cfg.container.enabled && !no_container;
+    let (runtime, container_cmd, session_container) = if use_container {
+        let image = cfg.container.image.as_deref()
+            .filter(|s| !s.is_empty())
+            .ok_or(error::AmError::ContainerImageNotConfigured)?;
+
+        let runtime = container::detect_runtime(cfg.container.runtime.clone())?;
+
+        // Pre-emptively remove any leftover container from a previous run
+        container::remove_if_exists(&runtime, &format!("am-{slug}"));
+
+        let vcs = worktree::detect_vcs(&repo_root)?;
+        let mounts = container::resolve_mounts(
+            slug,
+            &repo_root,
+            &vcs,
+            cfg.container.agent.as_deref(),
+        )?;
+
+        let extra_env: Vec<(&str, &str)> = vec![]; // GIT_DIR/GIT_WORK_TREE added inside build_run_command
+        let cmd = container::build_run_command(
+            &runtime,
+            image,
+            slug,
+            &mounts,
+            &cfg.container.env,
+            &extra_env,
+            &cfg.container.network,
+            "/workspace",
+            &format!("am-{slug}"),
+        );
+
+        let sc = session::SessionContainer {
+            runtime: format!("{:?}", runtime.kind).to_lowercase(),
+            image: image.to_string(),
+            container_id: None,
+        };
+        (Some(runtime), Some(cmd), Some(sc))
+    } else {
+        (None, None, None)
+    };
+
+    let worktree_path = worktree::create_git_worktree(slug, &repo_root)?;
     let window_name = format!("am-{slug}");
 
     if tmux::is_in_tmux() {
-        // Load project config for split settings
-        let project_config_path = repo_root.join(".am").join("config.toml");
-        let cfg = config::load_with_global(
-            config::global_config_path().as_deref(),
-            Some(&project_config_path),
-        )?;
-
         tmux::create_window(&window_name, &worktree_path)
             .map_err(|e| anyhow::anyhow!(
                 "{e}\nHint: a window named '{window_name}' may already exist — run 'am clean {slug}' first"
             ))?;
         tmux::split_window(&window_name, &worktree_path, &cfg.tmux.split)?;
+
+        // Send container run command to agent pane (pane 0)
+        if let Some(ref cmd) = container_cmd {
+            let cmd_str = cmd[1..].join(" "); // skip the binary, tmux runs it in the shell
+            let full_cmd = format!("{} {}", cmd[0], cmd_str);
+            tmux::send_keys(&tmux::get_pane_id(&window_name, 0), &full_cmd)?;
+        }
+
         tmux::select_pane(&tmux::get_pane_id(&window_name, 0))?;
         tmux::select_window(&window_name)?;
+    } else if let Some(ref cmd) = container_cmd {
+        // Not in tmux — exec the container directly, replacing this process
+        use std::os::unix::process::CommandExt;
+        let err = std::process::Command::new(&cmd[0])
+            .args(&cmd[1..])
+            .exec();
+        // exec() only returns on failure
+        return Err(error::AmError::ContainerError(format!("failed to exec container: {err}")).into());
     } else {
         println!("Note: not inside tmux — no window opened. Run 'am attach {slug}' from inside tmux to open one.");
     }
@@ -121,13 +180,16 @@ fn cmd_start(slug: &str, _agent: Option<&str>, _editor: Option<&str>, _no_contai
         shell_pane: format!("am-{slug}.1"),
         created_at: chrono::Utc::now(),
         status: session::SessionStatus::Active,
-        container: None,
+        container: session_container,
     };
     session::add_session(&repo_root, new_session)?;
 
     println!("Started session '{slug}'");
-    println!("  worktree: {}", worktree_path.display());
-    println!("  branch:   am/{slug}");
+    println!("  worktree:  {}", worktree_path.display());
+    println!("  branch:    am/{slug}");
+    if use_container {
+        println!("  container: am-{slug}");
+    }
     Ok(())
 }
 
@@ -244,6 +306,20 @@ fn cmd_clean(slug: &str, force: bool) -> anyhow::Result<()> {
         if !input.trim().eq_ignore_ascii_case("y") {
             println!("Aborted.");
             return Ok(());
+        }
+    }
+
+    // Stop and remove container if one was recorded for this session
+    if let Some(s) = session::find_session(&sessions, slug) {
+        if let Some(ref sc) = s.container {
+            let pref = match sc.runtime.as_str() {
+                "docker" => config::RuntimePreference::Docker,
+                _ => config::RuntimePreference::Podman,
+            };
+            if let Ok(rt) = container::detect_runtime(pref) {
+                let _ = container::stop_container(&rt, &format!("am-{slug}"));
+                let _ = container::remove_container(&rt, &format!("am-{slug}"));
+            }
         }
     }
 

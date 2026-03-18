@@ -104,32 +104,32 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 > Rootless Podman containers for session isolation. Git worktree mount layout.
 
-- [ ] **Design**
-  - [ ] Mount table for git repos (worktree, `.git`, `~/.gitconfig`, `~/.ssh`)
-  - [ ] `GIT_DIR` / `GIT_WORK_TREE` env var injection
-  - [ ] SELinux `,z` label: Linux + Podman only
-  - [ ] Container naming: `am-<slug>`; pre-emptive `podman rm -f` on collision
-  - [ ] `--no-container` flag behaviour: `container: null` in session record
-  - [ ] `container.startup_delay_ms` configurable (default 500ms)
-  - [ ] Fail loudly if `container.image` not set when container mode active
+- [x] **Design**
+  - [x] Mount table for git repos (worktree, `.git`, `~/.gitconfig`, `~/.ssh`)
+  - [x] `GIT_DIR` / `GIT_WORK_TREE` env var injection
+  - [x] SELinux `,z` label: Linux + Podman only
+  - [x] Container naming: `am-<slug>`; pre-emptive `podman rm -f` on collision
+  - [x] `--no-container` flag behaviour: `container: null` in session record
+  - [x] `container.startup_delay_ms` configurable (default 500ms)
+  - [x] Fail loudly if `container.image` not set when container mode active
 
-- [ ] **Tests**
-  - [ ] `container.rs`: `detect_runtime(Auto)` finds podman when on PATH
-  - [ ] `container.rs`: `detect_runtime(Auto)` errors when neither runtime found
-  - [ ] `container.rs`: `resolve_mounts` produces correct host/container paths for git repo
-  - [ ] `container.rs`: `build_run_command` includes all required flags (mounts, env, workdir, name)
-  - [ ] `container.rs`: `,z` appended on Linux+Podman, omitted otherwise
-  - [ ] `container.rs`: `stop_container` and `remove_container` build correct commands
-  - [ ] `am start` with `container.image` unset errors with `ContainerImageNotConfigured`
+- [x] **Tests**
+  - [x] `container.rs`: `detect_runtime(Auto)` finds podman when on PATH
+  - [x] `container.rs`: `detect_runtime(Auto)` errors when neither runtime found
+  - [x] `container.rs`: `resolve_mounts` produces correct host/container paths for git repo
+  - [x] `container.rs`: `build_run_command` includes all required flags (mounts, env, workdir, name)
+  - [x] `container.rs`: `,z` appended on Linux+Podman, omitted otherwise
+  - [x] `container.rs`: `stop_container` and `remove_container` build correct commands
+  - [x] `am start` with `container.image` unset errors with `ContainerImageNotConfigured`
 
-- [ ] **Implementation**
-  - [ ] `src/container.rs` — `detect_runtime()`, `resolve_mounts()`, `build_run_command()`, `stop_container()`, `remove_container()`
-  - [ ] `ContainerMounts`, `AgentAuthMount`, `MountMode`, `ContainerRuntime` types
-  - [ ] Wire container into `am start`: resolve mounts → build command → `send_keys` to agent pane
-  - [ ] `am clean` — stop + remove container before removing worktree
-  - [ ] `--no-container` flag wired in `am start`
+- [x] **Implementation**
+  - [x] `src/container.rs` — `detect_runtime()`, `resolve_mounts()`, `build_run_command()`, `stop_container()`, `remove_container()`
+  - [x] `ContainerMounts`, `AgentAuthMount`, `MountMode`, `ContainerRuntime` types
+  - [x] Wire container into `am start`: resolve mounts → build command → `send_keys` to agent pane (tmux) or `exec()` (no tmux)
+  - [x] `am clean` — stop + remove container before removing worktree
+  - [x] `--no-container` flag wired in `am start`
 
-- [ ] **UX Review** — `am start feat` (with image configured) launches a Podman container in the agent pane with correct mounts; `am clean feat` stops and removes it
+- [x] **UX Review** — `am start feat` (with image configured) launches a Podman container in the agent pane with correct mounts; `am clean feat` stops and removes it
 
 ---
 
@@ -368,6 +368,7 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 - [x] **Feature 0: Foundation** — project skeleton, error types, config loading, session state
 - [x] **Feature 1: Git Worktree Management** — `am start`, `am list`, `am clean` with real git worktrees
 - [x] **Feature 2: tmux Integration** — split-pane windows, `am attach` (create-or-attach), `am run`
+- [x] **Feature 3: Podman Container Integration** — rootless containers, git mount layout, `exec()` outside tmux
 
 ---
 
@@ -386,3 +387,4 @@ Track design decisions made during implementation:
 | 7 | Container name collision | `podman rm -f am-<slug>` before launch, log warning | Podman |
 | 8 | `am attach` when no window | Creates window + split (create-or-attach), not an error | tmux |
 | 9 | Prompt to start tmux session from `am start` | Deferred to v2 | tmux |
+| 10 | Container launch outside tmux | `exec()` the container directly in the current shell (replaces `am` process) | Podman |
