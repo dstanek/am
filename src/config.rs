@@ -81,7 +81,7 @@ impl Default for ContainerConfig {
         Self {
             enabled: true,
             runtime: RuntimePreference::Auto,
-            image: None,
+            image: Some("ubuntu:25.10".to_string()),
             agent: None,
             network: NetworkMode::Full,
             env: Vec::new(),
@@ -235,7 +235,7 @@ split_percent = 50
 [container]
 enabled = true
 runtime = "auto"       # "auto" | "podman" | "docker"
-image = ""
+image = "ubuntu:25.10"
 agent = ""
 network = "full"       # "full" | "none"
 env = []
@@ -298,7 +298,7 @@ mod tests {
         assert_eq!(config.tmux.split_percent, 50);
         assert!(config.container.enabled);
         assert_eq!(config.container.runtime, RuntimePreference::Auto);
-        assert!(config.container.image.is_none());
+        assert_eq!(config.container.image.as_deref(), Some("ubuntu:25.10"));
     }
 
     #[test]
