@@ -326,8 +326,10 @@ fn cmd_clean(slug: &str, force: bool) -> anyhow::Result<()> {
     // Kill tmux window (ignore error — window may not exist)
     let _ = tmux::kill_window(&format!("am-{slug}"));
 
-    // Remove worktree (ignore error — may already be gone)
-    let _ = worktree::remove_git_worktree(slug, &repo_root);
+    // Remove worktree — warn but continue if it's already gone
+    if let Err(e) = worktree::remove_git_worktree(slug, &repo_root) {
+        eprintln!("warning: could not fully remove worktree: {e}");
+    }
 
     // Remove session record
     session::remove_session(&repo_root, slug)?;

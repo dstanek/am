@@ -65,26 +65,28 @@ pub fn remove_git_worktree(slug: &str, repo_root: &Path) -> Result<()> {
     let repo = Repository::open(repo_root)
         .map_err(|e| AmError::WorktreeError(e.to_string()))?;
 
-    // Unlock and prune the worktree metadata
-    if let Ok(wt) = repo.find_worktree(slug) {
-        let mut prune_opts = git2::WorktreePruneOptions::new();
-        prune_opts.working_tree(true);
-        let _ = wt.prune(Some(&mut prune_opts));
-    }
-
-    // Remove the worktree directory
+    // Remove the directory FIRST — once it's gone git treats the worktree as
+    // invalid, which lets prune succeed without special flags.
     let worktree_path = repo_root.join(".am").join("worktrees").join(slug);
     if worktree_path.exists() {
         std::fs::remove_dir_all(&worktree_path)
             .map_err(|e| AmError::WorktreeError(format!("failed to remove directory: {e}")))?;
     }
 
-    // Delete the branch
-    let branch_name = format!("am/{slug}");
-    if let Ok(mut branch) = repo.find_branch(&branch_name, BranchType::Local) {
-        branch
+    // Prune the worktree registration from .git/worktrees/
+    if let Ok(wt) = repo.find_worktree(slug) {
+        let mut prune_opts = git2::WorktreePruneOptions::new();
+        prune_opts.working_tree(true);
+        let _ = wt.prune(Some(&mut prune_opts));
+    }
+
+    // Delete the branch via its ref directly — `branch.delete()` can refuse if
+    // git still considers the branch checked out somewhere.
+    let ref_name = format!("refs/heads/am/{slug}");
+    if let Ok(mut reference) = repo.find_reference(&ref_name) {
+        reference
             .delete()
-            .map_err(|e| AmError::WorktreeError(format!("failed to delete branch {branch_name}: {e}")))?;
+            .map_err(|e| AmError::WorktreeError(format!("failed to delete branch am/{slug}: {e}")))?;
     }
 
     Ok(())
