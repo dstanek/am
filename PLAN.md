@@ -137,25 +137,25 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 > Mount `~/.claude` into the container and optionally auto-launch `claude` in the agent pane.
 
-- [ ] **Design**
-  - [ ] Auth preset: `claude` → `~/.claude:/root/.claude:ro`
-  - [ ] Agent auto-launch flow: container start → 500ms delay → `send_keys "claude" Enter`
-  - [ ] `config.agent = "claude"` vs `--agent claude` precedence
-  - [ ] `am run <slug> claude` for manual launch in existing session
+- [x] **Design**
+  - [x] Auth preset: `claude` → `~/.claude:/root/.claude:ro`
+  - [x] Agent auto-launch flow: container start → 500ms delay → `send_keys "claude" Enter`
+  - [x] `config.agent = "claude"` vs `--agent claude` precedence (`--agent` > `config.container.agent` > `config.agent`)
+  - [x] `am run <slug> claude` for manual launch in existing session
 
-- [ ] **Tests**
-  - [ ] `container.rs`: `resolve_agent_auth_mount("claude")` returns correct host/container paths
-  - [ ] `container.rs`: `build_run_command` includes claude mount when preset is active
-  - [ ] `am start` with `agent = "claude"` queues second `send_keys` after delay
-  - [ ] `am run` sends correct keys to agent pane
+- [x] **Tests**
+  - [x] `container.rs`: `resolve_agent_auth_mount("claude")` returns correct host/container paths
+  - [x] `container.rs`: `build_run_command` includes claude mount when preset is active
+  - [x] `am start` with `agent = "claude"` queues second `send_keys` after delay
+  - [x] `am run` sends correct keys to agent pane
 
-- [ ] **Implementation**
-  - [ ] `resolve_agent_auth_mount()` with `claude` preset
-  - [ ] Wire `agent_preset` through `resolve_mounts()` and `build_run_command()`
-  - [ ] Auto-launch `send_keys` with configurable delay (`startup_delay_ms`)
-  - [ ] `am run` command fully implemented
+- [x] **Implementation**
+  - [x] `resolve_agent_auth_mount()` with `claude` preset
+  - [x] Wire `agent_preset` through `resolve_mounts()` and `build_run_command()`
+  - [x] Auto-launch `send_keys` with configurable delay (`startup_delay_ms`)
+  - [x] `am run` command fully implemented
 
-- [ ] **UX Review** — `am start feat --agent claude` opens a container and auto-launches Claude Code; `am run feat claude` works on an existing session
+- [x] **UX Review** — `am start feat --agent claude` opens a container and auto-launches Claude Code; `am run feat claude` works on an existing session
 
 ---
 

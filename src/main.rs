@@ -82,7 +82,7 @@ fn cmd_init() -> anyhow::Result<()> {
 
 // ── am start ──────────────────────────────────────────────────────────────────
 
-fn cmd_start(slug: &str, _agent: Option<&str>, _editor: Option<&str>, no_container: bool) -> anyhow::Result<()> {
+fn cmd_start(slug: &str, agent_flag: Option<&str>, _editor: Option<&str>, no_container: bool) -> anyhow::Result<()> {
     let repo_root = find_repo_root()?;
     let sessions = session::load_sessions(&repo_root)?;
 
@@ -96,6 +96,12 @@ fn cmd_start(slug: &str, _agent: Option<&str>, _editor: Option<&str>, no_contain
         config::global_config_path().as_deref(),
         Some(&project_config_path),
     )?;
+
+    // Effective agent: --agent flag > config.container.agent > config.agent
+    let effective_agent = agent_flag
+        .map(str::to_string)
+        .or_else(|| cfg.container.agent.clone())
+        .or_else(|| cfg.agent.clone());
 
     // Resolve container settings
     let use_container = cfg.container.enabled && !no_container;
@@ -114,11 +120,11 @@ fn cmd_start(slug: &str, _agent: Option<&str>, _editor: Option<&str>, no_contain
             slug,
             &repo_root,
             &vcs,
-            cfg.container.agent.as_deref(),
+            effective_agent.as_deref(),
         )?;
 
-        let extra_env: Vec<(&str, &str)> = vec![]; // GIT_DIR/GIT_WORK_TREE added inside build_run_command
-        let cmd = container::build_run_command(
+        let extra_env: Vec<(&str, &str)> = vec![];
+        let mut cmd = container::build_run_command(
             &runtime,
             image,
             slug,
@@ -129,6 +135,13 @@ fn cmd_start(slug: &str, _agent: Option<&str>, _editor: Option<&str>, no_contain
             "/workspace",
             &format!("am-{slug}"),
         );
+
+        // Outside tmux: append the agent as the container CMD so it launches directly
+        if !tmux::is_in_tmux() {
+            if let Some(ref agent) = effective_agent {
+                cmd.push(agent.clone());
+            }
+        }
 
         let sc = session::SessionContainer {
             runtime: format!("{:?}", runtime.kind).to_lowercase(),
@@ -152,9 +165,14 @@ fn cmd_start(slug: &str, _agent: Option<&str>, _editor: Option<&str>, no_contain
 
         // Send container run command to agent pane (pane 0)
         if let Some(ref cmd) = container_cmd {
-            let cmd_str = cmd[1..].join(" "); // skip the binary, tmux runs it in the shell
-            let full_cmd = format!("{} {}", cmd[0], cmd_str);
+            let full_cmd = cmd.join(" ");
             tmux::send_keys(&tmux::get_pane_id(&window_name, 0), &full_cmd)?;
+
+            // Auto-launch agent inside the container after startup delay
+            if let Some(ref agent) = effective_agent {
+                std::thread::sleep(std::time::Duration::from_millis(cfg.container.startup_delay_ms));
+                tmux::send_keys(&tmux::get_pane_id(&window_name, 0), agent)?;
+            }
         }
 
         tmux::select_pane(&tmux::get_pane_id(&window_name, 0))?;

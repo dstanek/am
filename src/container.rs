@@ -25,10 +25,12 @@ pub enum MountMode {
     ReadWrite,
 }
 
+
 #[derive(Debug, Clone)]
 pub struct AgentAuthMount {
     pub host_path: PathBuf,
     pub container_path: PathBuf,
+    pub mode: MountMode,
 }
 
 #[derive(Debug, Clone)]
@@ -37,7 +39,7 @@ pub struct ContainerMounts {
     pub vcs_host: PathBuf,       // .git dir (git) or .jj dir (jj)
     pub gitconfig_host: PathBuf, // ~/.gitconfig
     pub ssh_host: PathBuf,       // ~/.ssh
-    pub agent_auth: Option<AgentAuthMount>,
+    pub agent_auth: Vec<AgentAuthMount>,
 }
 
 // ── Runtime detection ─────────────────────────────────────────────────────────
@@ -116,33 +118,52 @@ pub fn resolve_mounts(
     };
     let gitconfig_host = home.join(".gitconfig");
     let ssh_host = home.join(".ssh");
-    let agent_auth = agent_preset.and_then(|p| resolve_agent_auth_mount(p));
+    let agent_auth = agent_preset.map(resolve_agent_auth_mount).unwrap_or_default();
 
     Ok(ContainerMounts { worktree_host, vcs_host, gitconfig_host, ssh_host, agent_auth })
 }
 
-pub fn resolve_agent_auth_mount(agent_preset: &str) -> Option<AgentAuthMount> {
-    let home = home_dir().ok()?;
+pub fn resolve_agent_auth_mount(agent_preset: &str) -> Vec<AgentAuthMount> {
+    let home = match home_dir() {
+        Ok(h) => h,
+        Err(_) => return vec![],
+    };
     match agent_preset {
-        "claude" => Some(AgentAuthMount {
-            host_path: home.join(".claude"),
-            container_path: PathBuf::from("/root/.claude"),
-        }),
-        "copilot" => Some(AgentAuthMount {
+        "claude" => {
+            // Config dir: use CLAUDE_CONFIG_DIR if set, otherwise ~/.claude
+            let config_host = std::env::var("CLAUDE_CONFIG_DIR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| home.join(".claude"));
+            vec![
+                AgentAuthMount {
+                    host_path: config_host,
+                    container_path: PathBuf::from("/root/.claude"),
+                    mode: MountMode::ReadWrite,
+                },
+                AgentAuthMount {
+                    host_path: home.join(".claude.json"),
+                    container_path: PathBuf::from("/root/.claude.json"),
+                    mode: MountMode::ReadWrite,
+                },
+            ]
+        }
+        "copilot" => vec![AgentAuthMount {
             host_path: home.join(".config").join("github-copilot"),
             container_path: PathBuf::from("/root/.config/github-copilot"),
-        }),
-        "gemini" => Some(AgentAuthMount {
+            mode: MountMode::ReadOnly,
+        }],
+        "gemini" => vec![AgentAuthMount {
             host_path: home.join(".gemini"),
             container_path: PathBuf::from("/root/.gemini"),
-        }),
-        "codex" | "aider" => None, // env-var only, no filesystem mount
+            mode: MountMode::ReadOnly,
+        }],
+        "codex" | "aider" => vec![], // env-var only, no filesystem mount
         unknown => {
             eprintln!(
                 "warning: unknown agent preset '{unknown}' — no auth mount added. \
                  Use container.env to pass credentials manually."
             );
-            None
+            vec![]
         }
     }
 }
@@ -186,13 +207,13 @@ pub fn build_run_command(
     cmd.push("-v".to_string());
     cmd.push(mount_str(&mounts.ssh_host, "/root/.ssh", MountMode::ReadOnly, selinux));
 
-    // Agent auth mount (if any)
-    if let Some(auth) = &mounts.agent_auth {
+    // Agent auth mounts
+    for auth in &mounts.agent_auth {
         cmd.push("-v".to_string());
         cmd.push(mount_str(
             &auth.host_path,
             auth.container_path.to_str().unwrap_or("/root/.agent"),
-            MountMode::ReadOnly,
+            auth.mode.clone(),
             selinux,
         ));
     }
@@ -306,7 +327,7 @@ mod tests {
             vcs_host: tmp.join(".git"),
             gitconfig_host: tmp.join(".gitconfig"),
             ssh_host: tmp.join(".ssh"),
-            agent_auth: None,
+            agent_auth: vec![],
         }
     }
 
@@ -370,7 +391,7 @@ mod tests {
         assert_eq!(mounts.vcs_host, repo_root.join(".git"));
         assert_eq!(mounts.gitconfig_host, tmp.path().join(".gitconfig"));
         assert_eq!(mounts.ssh_host, tmp.path().join(".ssh"));
-        assert!(mounts.agent_auth.is_none());
+        assert!(mounts.agent_auth.is_empty());
 
         std::env::remove_var("HOME");
     }
@@ -380,11 +401,12 @@ mod tests {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
+        std::env::remove_var("CLAUDE_CONFIG_DIR");
 
         let mounts = resolve_mounts("feat", tmp.path(), &Vcs::Git, Some("claude")).unwrap();
-        let auth = mounts.agent_auth.unwrap();
-        assert_eq!(auth.host_path, tmp.path().join(".claude"));
-        assert_eq!(auth.container_path, PathBuf::from("/root/.claude"));
+        assert_eq!(mounts.agent_auth.len(), 2);
+        assert_eq!(mounts.agent_auth[0].host_path, tmp.path().join(".claude"));
+        assert_eq!(mounts.agent_auth[0].container_path, PathBuf::from("/root/.claude"));
 
         std::env::remove_var("HOME");
     }
@@ -566,5 +588,88 @@ mod tests {
         assert!(out.contains("am-feat"));
 
         std::env::remove_var("MOCK_CONTAINER_LOG");
+    }
+
+    // ── Feature 4: Claude auth mount ──────────────────────────────────────────
+
+    #[test]
+    fn resolve_agent_auth_mount_claude_defaults_to_dot_claude() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+        std::env::remove_var("CLAUDE_CONFIG_DIR");
+
+        let mounts = resolve_agent_auth_mount("claude");
+        assert_eq!(mounts.len(), 2);
+        assert_eq!(mounts[0].host_path, tmp.path().join(".claude"));
+        assert_eq!(mounts[0].container_path, PathBuf::from("/root/.claude"));
+        assert_eq!(mounts[0].mode, MountMode::ReadWrite);
+        assert_eq!(mounts[1].host_path, tmp.path().join(".claude.json"));
+        assert_eq!(mounts[1].container_path, PathBuf::from("/root/.claude.json"));
+        assert_eq!(mounts[1].mode, MountMode::ReadWrite);
+
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn resolve_agent_auth_mount_claude_uses_claude_config_dir_when_set() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        let custom_config = tmp.path().join("custom-claude-config");
+        std::env::set_var("HOME", tmp.path());
+        std::env::set_var("CLAUDE_CONFIG_DIR", &custom_config);
+
+        let mounts = resolve_agent_auth_mount("claude");
+        assert_eq!(mounts.len(), 2);
+        assert_eq!(mounts[0].host_path, custom_config);
+        assert_eq!(mounts[0].container_path, PathBuf::from("/root/.claude"));
+        assert_eq!(mounts[0].mode, MountMode::ReadWrite);
+        assert_eq!(mounts[1].host_path, tmp.path().join(".claude.json"));
+        assert_eq!(mounts[1].container_path, PathBuf::from("/root/.claude.json"));
+
+        std::env::remove_var("CLAUDE_CONFIG_DIR");
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn build_run_command_includes_claude_mount_when_preset_active() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+
+        let mut mounts = make_mounts(tmp.path());
+        mounts.agent_auth = vec![AgentAuthMount {
+            host_path: tmp.path().join(".claude"),
+            container_path: PathBuf::from("/root/.claude"),
+            mode: MountMode::ReadWrite,
+        }];
+
+        let cmd = build_run_command(
+            &podman_runtime(),
+            "ubuntu:25.10",
+            "feat",
+            &mounts,
+            &[],
+            &[],
+            &NetworkMode::Full,
+            "/workspace",
+            "am-feat",
+        );
+        let joined = cmd.join(" ");
+        assert!(joined.contains("/root/.claude"), "expected claude mount, got: {joined}");
+
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn codex_and_aider_presets_return_no_mount() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+
+        assert!(resolve_agent_auth_mount("codex").is_empty());
+        assert!(resolve_agent_auth_mount("aider").is_empty());
+
+        std::env::remove_var("HOME");
     }
 }
