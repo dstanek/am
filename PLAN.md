@@ -363,6 +363,21 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 ---
 
+## Bugs / Improvements Backlog
+
+### Bug: Context-aware user messages
+
+Commands like `am clean` currently say "Remove worktree and kill tmux window" even when
+not running inside tmux. All user-facing strings should reflect the actual runtime context.
+
+**Approach:** introduce a `Messages` trait (or pair of structs — `TmuxMessages` and
+`PlainMessages`) with associated constants/methods for each user-facing string. The right
+implementation is chosen once at startup based on `tmux::is_in_tmux()` and threaded
+through (or stored as a global) so every command automatically uses context-appropriate
+wording. No conditional `if is_in_tmux()` checks scattered through command handlers.
+
+---
+
 ## Completed Features
 
 - [x] **Feature 0: Foundation** — project skeleton, error types, config loading, session state
