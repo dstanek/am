@@ -1,0 +1,48 @@
+FROM ubuntu:25.10
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN <<EOF
+set -e
+
+# System packages: dev tools Copilot commonly needs
+apt-get update && apt-get install -y \
+    ca-certificates \
+    curl \
+    wget \
+    gnupg \
+    git \
+    build-essential \
+    python3 \
+    python3-pip \
+    python3-venv \
+    ripgrep \
+    fd-find \
+    jq \
+    unzip \
+    less \
+    neovim \
+    ssh
+ln -s /usr/bin/fdfind /usr/local/bin/fd
+
+# Install GitHub CLI (gh) — needed for auth (gh auth login stores creds in ~/.config/gh)
+curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+    | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+    > /etc/apt/sources.list.d/github-cli.list
+apt-get update && apt-get install -y gh
+
+# Install Node.js LTS via NodeSource (required for @github/copilot, needs Node 22+)
+curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+apt-get install -y nodejs
+
+# Install GitHub Copilot CLI
+npm install -g @github/copilot
+
+rm -rf /var/lib/apt/lists/*
+EOF
+
+# ~/.config/gh and ~/.config/github-copilot will be mounted read-only by `am` at runtime
+WORKDIR /workspace

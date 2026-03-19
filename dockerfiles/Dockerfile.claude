@@ -3,8 +3,11 @@ FROM ubuntu:25.10
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
+RUN <<EOF
+set -e
+
 # System packages: dev tools Claude commonly needs
-RUN apt-get update && apt-get install -y \
+apt-get update && apt-get install -y \
     ca-certificates \
     curl \
     wget \
@@ -20,17 +23,18 @@ RUN apt-get update && apt-get install -y \
     unzip \
     less \
     neovim \
-    ssh \
-    && ln -s /usr/bin/fdfind /usr/local/bin/fd \
-    && rm -rf /var/lib/apt/lists/*
+    ssh
+ln -s /usr/bin/fdfind /usr/local/bin/fd
 
 # Install Node.js LTS via NodeSource
-RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+apt-get install -y nodejs
 
 # Install Claude Code
-RUN npm install -g @anthropic-ai/claude-code
+npm install -g @anthropic-ai/claude-code
+
+rm -rf /var/lib/apt/lists/*
+EOF
 
 # ~/.claude will be mounted read-only by `am` at runtime — no credentials baked in
 WORKDIR /workspace

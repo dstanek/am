@@ -5,7 +5,10 @@ endif
 
 .PHONY: all build-claude
 
-all: build-claude
+all: build-claude build-copilot
 
 build-claude:
 	$(DOCKER) build -f dockerfiles/Dockerfile.claude -t am-claude:latest .
+
+build-copilot:
+	$(DOCKER) build -f dockerfiles/Dockerfile.copilot -t am-copilot:latest .

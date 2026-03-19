@@ -186,21 +186,21 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 > Auth mount preset for GitHub Copilot CLI.
 
-- [ ] **Design**
-  - [ ] Preset: `~/.config/github-copilot:/root/.config/github-copilot:ro`
-  - [ ] No additional env vars required beyond the mount
-  - [ ] `config.agent = "copilot"` activates the preset
+- [x] **Design**
+  - [x] Preset: `~/.config/gh:/root/.config/gh:ro` + `~/.config/github-copilot:/root/.config/github-copilot:ro`
+  - [x] No additional env vars required beyond the mounts
+  - [x] `config.agent = "copilot"` activates the preset
 
-- [ ] **Tests**
-  - [ ] `resolve_agent_auth_mount("copilot")` returns correct host/container paths
-  - [ ] `build_run_command` includes the copilot mount when preset is active
-  - [ ] `am start feat --agent copilot` sends correct container command to agent pane
+- [x] **Tests**
+  - [x] `resolve_agent_auth_mount("copilot")` returns correct host/container paths for both dirs
+  - [x] `build_run_command` includes both copilot mounts when preset is active
+  - [x] `am start feat --agent copilot` sends correct container command to agent pane
 
-- [ ] **Implementation**
-  - [ ] `copilot` branch in `resolve_agent_auth_mount()`
-  - [ ] Wired through `resolve_mounts()` and `build_run_command()`
+- [x] **Implementation**
+  - [x] `copilot` branch in `resolve_agent_auth_mount()` — mounts `~/.config/gh` and `~/.config/github-copilot`
+  - [x] Wired through `resolve_mounts()` and `build_run_command()`
 
-- [ ] **UX Review** — `am start feat --agent copilot` launches a container with the Copilot credential directory mounted
+- [x] **UX Review** — `am start feat --agent copilot` launches a container with both Copilot credential directories mounted
 
 ---
 
@@ -384,6 +384,9 @@ wording. No conditional `if is_in_tmux()` checks scattered through command handl
 - [x] **Feature 1: Git Worktree Management** — `am start`, `am list`, `am clean` with real git worktrees
 - [x] **Feature 2: tmux Integration** — split-pane windows, `am attach` (create-or-attach), `am run`
 - [x] **Feature 3: Podman Container Integration** — rootless containers, git mount layout, `exec()` outside tmux
+- [x] **Feature 4: Claude Code Integration** — `~/.claude` mount preset, auto-launch in container
+- [x] **Feature 5: Docker Support** — runtime fallback, no `,z` labels
+- [x] **Feature 6: Copilot Integration** — `Dockerfile.copilot` with gh + `@github/copilot`; `~/.config/gh` mount preset
 
 ---
 

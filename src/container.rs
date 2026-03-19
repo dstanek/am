@@ -147,11 +147,19 @@ pub fn resolve_agent_auth_mount(agent_preset: &str) -> Vec<AgentAuthMount> {
                 },
             ]
         }
-        "copilot" => vec![AgentAuthMount {
-            host_path: home.join(".config").join("github-copilot"),
-            container_path: PathBuf::from("/root/.config/github-copilot"),
-            mode: MountMode::ReadOnly,
-        }],
+        "copilot" => vec![
+            AgentAuthMount {
+                // GitHub CLI auth token (required for Copilot authentication)
+                host_path: home.join(".config").join("gh"),
+                container_path: PathBuf::from("/root/.config/gh"),
+                mode: MountMode::ReadOnly,
+            },
+            AgentAuthMount {
+                host_path: home.join(".config").join("github-copilot"),
+                container_path: PathBuf::from("/root/.config/github-copilot"),
+                mode: MountMode::ReadOnly,
+            },
+        ],
         "gemini" => vec![AgentAuthMount {
             host_path: home.join(".gemini"),
             container_path: PathBuf::from("/root/.gemini"),
@@ -698,6 +706,42 @@ mod tests {
         );
         let joined = cmd.join(" ");
         assert!(joined.contains("/root/.claude"), "expected claude mount, got: {joined}");
+
+        std::env::remove_var("HOME");
+    }
+
+    // ── Feature 6: Copilot auth mount ─────────────────────────────────────────
+
+    #[test]
+    fn resolve_agent_auth_mount_copilot_returns_both_dirs() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+
+        let mounts = resolve_agent_auth_mount("copilot");
+        assert_eq!(mounts.len(), 2);
+
+        let paths: Vec<_> = mounts.iter().map(|m| m.host_path.clone()).collect();
+        assert!(paths.contains(&tmp.path().join(".config").join("gh")), "missing gh config");
+        assert!(paths.contains(&tmp.path().join(".config").join("github-copilot")), "missing github-copilot config");
+
+        for m in &mounts {
+            assert_eq!(m.mode, MountMode::ReadOnly, "copilot mounts should be read-only");
+        }
+
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn resolve_agent_auth_mount_copilot_container_paths_match() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+
+        let mounts = resolve_agent_auth_mount("copilot");
+        let container_paths: Vec<_> = mounts.iter().map(|m| m.container_path.clone()).collect();
+        assert!(container_paths.contains(&PathBuf::from("/root/.config/gh")));
+        assert!(container_paths.contains(&PathBuf::from("/root/.config/github-copilot")));
 
         std::env::remove_var("HOME");
     }
