@@ -173,12 +173,10 @@ pub fn resolve_agent_auth_mount(agent_preset: &str) -> Vec<AgentAuthMount> {
 pub fn build_run_command(
     runtime: &ContainerRuntime,
     image: &str,
-    slug: &str,
     mounts: &ContainerMounts,
     env_passthrough: &[String],
     extra_env: &[(&str, &str)],
     network: &NetworkMode,
-    working_dir: &str,
     container_name: &str,
 ) -> Vec<String> {
     let selinux = use_selinux_labels(runtime);
@@ -191,13 +189,15 @@ pub fn build_run_command(
         container_name.to_string(),
     ];
 
-    // Worktree mount
+    // Worktree mount — same path inside the container as on the host
+    let worktree_str = mounts.worktree_host.to_string_lossy();
     cmd.push("-v".to_string());
-    cmd.push(mount_str(&mounts.worktree_host, "/workspace", MountMode::ReadWrite, selinux));
+    cmd.push(mount_str(&mounts.worktree_host, &worktree_str, MountMode::ReadWrite, selinux));
 
-    // VCS dir mount (.git or .jj)
+    // VCS dir mount — same path inside the container as on the host
+    let vcs_str = mounts.vcs_host.to_string_lossy();
     cmd.push("-v".to_string());
-    cmd.push(mount_str(&mounts.vcs_host, "/mainrepo/.git", MountMode::ReadWrite, selinux));
+    cmd.push(mount_str(&mounts.vcs_host, &vcs_str, MountMode::ReadWrite, selinux));
 
     // ~/.gitconfig
     cmd.push("-v".to_string());
@@ -218,12 +218,6 @@ pub fn build_run_command(
         ));
     }
 
-    // GIT_DIR and GIT_WORK_TREE for git repos
-    cmd.push("-e".to_string());
-    cmd.push(format!("GIT_DIR=/mainrepo/.git/worktrees/{slug}"));
-    cmd.push("-e".to_string());
-    cmd.push("GIT_WORK_TREE=/workspace".to_string());
-
     // Extra env vars (e.g. from config)
     for (key, val) in extra_env {
         cmd.push("-e".to_string());
@@ -242,9 +236,9 @@ pub fn build_run_command(
         cmd.push("none".to_string());
     }
 
-    // Working directory
+    // Working directory — same as worktree host path
     cmd.push("--workdir".to_string());
-    cmd.push(working_dir.to_string());
+    cmd.push(worktree_str.into_owned());
 
     cmd.push(image.to_string());
     cmd
@@ -425,15 +419,14 @@ mod tests {
     fn build_run_command_includes_required_flags() {
         let tmp = TempDir::new().unwrap();
         let mounts = make_mounts(tmp.path());
+        let worktree = tmp.path().join("worktrees/feat").to_string_lossy().into_owned();
         let cmd = build_run_command(
             &podman_runtime(),
             "ubuntu:25.10",
-            "feat",
             &mounts,
             &[],
             &[],
             &NetworkMode::Full,
-            "/workspace",
             "am-feat",
         );
 
@@ -442,33 +435,55 @@ mod tests {
         assert!(joined.contains("--rm"));
         assert!(joined.contains("-it"));
         assert!(joined.contains("--name am-feat"));
-        assert!(joined.contains("/workspace"));
-        assert!(joined.contains("--workdir /workspace"));
+        assert!(joined.contains(&worktree));
+        assert!(joined.contains(&format!("--workdir {worktree}")));
         assert!(joined.contains("ubuntu:25.10"));
-        assert!(joined.contains("GIT_DIR=/mainrepo/.git/worktrees/feat"));
-        assert!(joined.contains("GIT_WORK_TREE=/workspace"));
+        assert!(!joined.contains("GIT_DIR"), "GIT_DIR should not be set");
+        assert!(!joined.contains("GIT_WORK_TREE"), "GIT_WORK_TREE should not be set");
     }
 
     #[test]
     fn build_run_command_includes_all_mounts() {
         let tmp = TempDir::new().unwrap();
         let mounts = make_mounts(tmp.path());
+        let worktree = tmp.path().join("worktrees/feat").to_string_lossy().into_owned();
+        let git = tmp.path().join(".git").to_string_lossy().into_owned();
         let cmd = build_run_command(
             &docker_runtime(),
             "ubuntu:25.10",
-            "feat",
             &mounts,
             &[],
             &[],
             &NetworkMode::Full,
-            "/workspace",
             "am-feat",
         );
         let joined = cmd.join(" ");
-        assert!(joined.contains("/workspace"));
-        assert!(joined.contains("/mainrepo/.git"));
+        assert!(joined.contains(&worktree), "missing worktree mount");
+        assert!(joined.contains(&git), "missing vcs mount");
         assert!(joined.contains("/root/.gitconfig"));
         assert!(joined.contains("/root/.ssh"));
+    }
+
+    #[test]
+    fn build_run_command_mounts_use_host_paths() {
+        let tmp = TempDir::new().unwrap();
+        let mounts = make_mounts(tmp.path());
+        let worktree = tmp.path().join("worktrees/feat").to_string_lossy().into_owned();
+        let git = tmp.path().join(".git").to_string_lossy().into_owned();
+        let cmd = build_run_command(
+            &podman_runtime(),
+            "ubuntu:25.10",
+            &mounts,
+            &[],
+            &[],
+            &NetworkMode::Full,
+            "am-feat",
+        );
+        let joined = cmd.join(" ");
+        // Container path should equal host path for worktree and vcs
+        assert!(joined.contains(&format!("{worktree}:{worktree}")), "worktree mount should use host path: {joined}");
+        assert!(joined.contains(&format!("{git}:{git}")), "vcs mount should use host path: {joined}");
+        assert!(joined.contains(&format!("--workdir {worktree}")), "workdir should be worktree path: {joined}");
     }
 
     #[test]
@@ -478,12 +493,10 @@ mod tests {
         let cmd = build_run_command(
             &podman_runtime(),
             "ubuntu:25.10",
-            "feat",
             &mounts,
             &[],
             &[],
             &NetworkMode::Full,
-            "/workspace",
             "am-feat",
         );
         let joined = cmd.join(" ");
@@ -503,12 +516,10 @@ mod tests {
         let cmd = build_run_command(
             &docker_runtime(),
             "ubuntu:25.10",
-            "feat",
             &mounts,
             &[],
             &[],
             &NetworkMode::Full,
-            "/workspace",
             "am-feat",
         );
         let joined = cmd.join(" ");
@@ -522,12 +533,10 @@ mod tests {
         let cmd = build_run_command(
             &podman_runtime(),
             "ubuntu:25.10",
-            "feat",
             &mounts,
             &[],
             &[],
             &NetworkMode::None,
-            "/workspace",
             "am-feat",
         );
         assert!(cmd.contains(&"--network".to_string()));
@@ -541,12 +550,10 @@ mod tests {
         let cmd = build_run_command(
             &podman_runtime(),
             "ubuntu:25.10",
-            "feat",
             &mounts,
             &["ANTHROPIC_API_KEY".to_string()],
             &[],
             &NetworkMode::Full,
-            "/workspace",
             "am-feat",
         );
         let joined = cmd.join(" ");
@@ -647,12 +654,10 @@ mod tests {
         let cmd = build_run_command(
             &podman_runtime(),
             "ubuntu:25.10",
-            "feat",
             &mounts,
             &[],
             &[],
             &NetworkMode::Full,
-            "/workspace",
             "am-feat",
         );
         let joined = cmd.join(" ");

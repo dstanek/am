@@ -127,12 +127,10 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, _editor: Option<&str>, no_con
         let mut cmd = container::build_run_command(
             &runtime,
             image,
-            slug,
             &mounts,
             &cfg.container.env,
             &extra_env,
             &cfg.container.network,
-            "/workspace",
             &format!("am-{slug}"),
         );
 
