@@ -370,6 +370,42 @@ mod tests {
         std::env::remove_var("AM_DOCKER_BIN");
     }
 
+    #[test]
+    fn detect_runtime_explicit_podman_errors_when_not_found() {
+        let _g = lock_env();
+        std::env::set_var("AM_PODMAN_BIN", "/nonexistent/podman");
+
+        let err = detect_runtime(RuntimePreference::Podman).unwrap_err();
+        assert!(err.to_string().contains("Podman"));
+
+        std::env::remove_var("AM_PODMAN_BIN");
+    }
+
+    #[test]
+    fn detect_runtime_explicit_docker_errors_when_not_found() {
+        let _g = lock_env();
+        std::env::set_var("AM_DOCKER_BIN", "/nonexistent/docker");
+
+        let err = detect_runtime(RuntimePreference::Docker).unwrap_err();
+        assert!(err.to_string().contains("Podman"));
+
+        std::env::remove_var("AM_DOCKER_BIN");
+    }
+
+    #[test]
+    fn detect_runtime_explicit_docker_finds_docker() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        let docker = fake_bin(tmp.path(), "docker");
+        std::env::set_var("AM_DOCKER_BIN", &docker);
+
+        let rt = detect_runtime(RuntimePreference::Docker).unwrap();
+        assert_eq!(rt.kind, RuntimeKind::Docker);
+        assert_eq!(rt.bin, docker);
+
+        std::env::remove_var("AM_DOCKER_BIN");
+    }
+
     // ── resolve_mounts ────────────────────────────────────────────────────────
 
     #[test]

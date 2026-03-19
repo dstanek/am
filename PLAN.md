@@ -163,22 +163,22 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 > Docker as a fallback when Podman is not available.
 
-- [ ] **Design**
-  - [ ] `RuntimePreference::Auto` order: Podman first, Docker second
-  - [ ] Docker differences: no `,z` SELinux labels on Linux
-  - [ ] `config.container.runtime = "docker"` to force Docker
+- [x] **Design**
+  - [x] `RuntimePreference::Auto` order: Podman first, Docker second
+  - [x] Docker differences: no `,z` SELinux labels on Linux
+  - [x] `config.container.runtime = "docker"` to force Docker
 
-- [ ] **Tests**
-  - [ ] `detect_runtime(Auto)` returns Docker when Podman absent but Docker present
-  - [ ] `detect_runtime(Docker)` errors when Docker not on PATH
-  - [ ] `build_run_command` omits `,z` when runtime is Docker
+- [x] **Tests**
+  - [x] `detect_runtime(Auto)` returns Docker when Podman absent but Docker present
+  - [x] `detect_runtime(Docker)` errors when Docker not on PATH
+  - [x] `build_run_command` omits `,z` when runtime is Docker
 
-- [ ] **Implementation**
-  - [ ] `detect_runtime()` Docker branch
-  - [ ] `,z` conditional on runtime type (not just OS)
-  - [ ] `RuntimePreference::Docker` config variant wired
+- [x] **Implementation**
+  - [x] `detect_runtime()` Docker branch
+  - [x] `,z` conditional on runtime type (not just OS)
+  - [x] `RuntimePreference::Docker` config variant wired
 
-- [ ] **UX Review** — on a system with only Docker, `am start feat` uses Docker correctly; `am list` shows `docker` in container column
+- [x] **UX Review** — on a system with only Docker, `am start feat` uses Docker correctly; `am list` shows `docker` in container column
 
 ---
 
