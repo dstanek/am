@@ -68,12 +68,12 @@ pub fn detect_runtime(preference: RuntimePreference) -> Result<ContainerRuntime>
         RuntimePreference::Podman => {
             find_bin("podman", "AM_PODMAN_BIN")
                 .map(|bin| ContainerRuntime { kind: RuntimeKind::Podman, bin })
-                .ok_or_else(|| AmError::ContainerRuntimeNotFound.into())
+                .ok_or_else(|| AmError::RequestedContainerRuntimeNotFound("podman".to_string()).into())
         }
         RuntimePreference::Docker => {
             find_bin("docker", "AM_DOCKER_BIN")
                 .map(|bin| ContainerRuntime { kind: RuntimeKind::Docker, bin })
-                .ok_or_else(|| AmError::ContainerRuntimeNotFound.into())
+                .ok_or_else(|| AmError::RequestedContainerRuntimeNotFound("docker".to_string()).into())
         }
     }
 }
@@ -376,7 +376,7 @@ mod tests {
         std::env::set_var("AM_PODMAN_BIN", "/nonexistent/podman");
 
         let err = detect_runtime(RuntimePreference::Podman).unwrap_err();
-        assert!(err.to_string().contains("Podman"));
+        assert!(err.to_string().to_lowercase().contains("podman"));
 
         std::env::remove_var("AM_PODMAN_BIN");
     }
@@ -387,7 +387,7 @@ mod tests {
         std::env::set_var("AM_DOCKER_BIN", "/nonexistent/docker");
 
         let err = detect_runtime(RuntimePreference::Docker).unwrap_err();
-        assert!(err.to_string().contains("Podman"));
+        assert!(err.to_string().to_lowercase().contains("docker"));
 
         std::env::remove_var("AM_DOCKER_BIN");
     }

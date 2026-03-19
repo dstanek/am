@@ -20,11 +20,16 @@ pub enum AmError {
     #[error("tmux error: {0}")]
     TmuxError(String),
 
-    #[error("no container runtime found — install Podman (https://podman.io/getting-started/installation) or Docker (https://docs.docker.com/get-docker/)")]
+    #[error("no container runtime found — install Podman or Docker. See Podman: https://podman.io/getting-started/installation or Docker: https://docs.docker.com/get-docker/")]
     ContainerRuntimeNotFound,
 
-    #[error("container.image is not configured — set it in .am/config.toml or ~/.config/am/config.toml")]
+    #[error("requested container runtime '{0}' not found — install it or change .am/config.toml (container.runtime)")]
+    RequestedContainerRuntimeNotFound(String),
+
+    #[error("container.image is not configured — set `container.image` in .am/config.toml or ~/.config/am/config.toml (e.g., image = \"ubuntu:25.10\")")]
     ContainerImageNotConfigured,
+
+
 
     #[error("container error: {0}")]
     ContainerError(String),
