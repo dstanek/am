@@ -103,10 +103,17 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, _editor: Option<&str>, no_con
         .or_else(|| cfg.container.agent.clone())
         .or_else(|| cfg.agent.clone());
 
-    // Detect VCS up front — used for both worktree creation and container mounts
+    // ── Early validation (fail before any side effects) ───────────────────────
+
+    // 1. VCS
     let vcs = worktree::detect_vcs(&repo_root)?;
 
-    // Resolve container settings
+    // 2. Agent credentials
+    if let Some(ref agent) = effective_agent {
+        container::validate_agent(agent)?;
+    }
+
+    // 3. Container config
     let use_container = cfg.container.enabled && !no_container;
     let (runtime, container_cmd, session_container) = if use_container {
         let image = cfg.container.image.as_deref()

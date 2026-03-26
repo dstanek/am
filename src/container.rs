@@ -166,14 +166,39 @@ pub fn resolve_agent_auth_mount(agent: &str) -> Vec<AgentAuthMount> {
             mode: MountMode::ReadOnly,
         }],
         "codex" | "aider" => vec![], // env-var only, no filesystem mount
-        unknown => {
-            eprintln!(
-                "warning: unknown agent preset '{unknown}' — no auth mount added. \
-                 Use container.env to pass credentials manually."
-            );
-            vec![]
+        _unknown => vec![], // treat as a raw launch command — no auth mount
+    }
+}
+
+/// Validate that a known agent has its required credential directories
+/// present on the host. Unknown values are treated as raw commands and always pass.
+/// Call this early in `am start` before any side effects.
+pub fn validate_agent(agent: &str) -> Result<()> {
+    let home = home_dir()?;
+    let config_dir = std::env::var("CLAUDE_CONFIG_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| home.join(".claude"));
+
+    let (required, label) = match agent {
+        "claude"  => (vec![config_dir], "claude"),
+        "copilot" => (vec![home.join(".config").join("gh")], "copilot"),
+        "gemini"  => (vec![home.join(".gemini")], "gemini"),
+        "codex"   => return Ok(()), // env-var only, no filesystem check
+        unknown   => return Err(AmError::ConfigError(format!(
+            "unknown agent '{unknown}' — valid agents are: claude, copilot, gemini, codex",
+        )).into()),
+    };
+
+    for path in &required {
+        if !path.exists() {
+            return Err(AmError::ConfigError(format!(
+                "agent '{label}' requires {path} to exist on the host — \
+                 make sure {label} is installed and authenticated",
+                path = path.display(),
+            )).into());
         }
     }
+    Ok(())
 }
 
 // ── Command building ──────────────────────────────────────────────────────────
@@ -694,7 +719,7 @@ mod tests {
     }
 
     #[test]
-    fn build_run_command_includes_claude_mount_when_preset_active() {
+    fn build_run_command_includes_claude_mount_when_active() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
@@ -717,6 +742,102 @@ mod tests {
         );
         let joined = cmd.join(" ");
         assert!(joined.contains("/root/.claude"), "expected claude mount, got: {joined}");
+
+        std::env::remove_var("HOME");
+    }
+
+    // ── validate_agent ─────────────────────────────────────────────────
+
+    #[test]
+    fn validate_agent_claude_ok_when_dir_exists() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+        std::env::remove_var("CLAUDE_CONFIG_DIR");
+        std::fs::create_dir(tmp.path().join(".claude")).unwrap();
+
+        assert!(validate_agent("claude").is_ok());
+
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn validate_agent_claude_fails_when_dir_missing() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+        std::env::remove_var("CLAUDE_CONFIG_DIR");
+
+        assert!(validate_agent("claude").is_err());
+
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn validate_agent_copilot_ok_when_gh_dir_exists() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+        std::fs::create_dir_all(tmp.path().join(".config").join("gh")).unwrap();
+
+        assert!(validate_agent("copilot").is_ok());
+
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn validate_agent_copilot_fails_when_gh_dir_missing() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+
+        assert!(validate_agent("copilot").is_err());
+
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn validate_agent_gemini_ok_when_dir_exists() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+        std::fs::create_dir(tmp.path().join(".gemini")).unwrap();
+
+        assert!(validate_agent("gemini").is_ok());
+
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn validate_agent_gemini_fails_when_dir_missing() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+
+        assert!(validate_agent("gemini").is_err());
+
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn validate_agent_codex_always_ok() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+
+        assert!(validate_agent("codex").is_ok());
+
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn validate_agent_unknown_errors() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+
+        let err = validate_agent("my-custom-agent").unwrap_err();
+        assert!(err.to_string().contains("my-custom-agent"));
 
         std::env::remove_var("HOME");
     }
