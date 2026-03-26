@@ -243,42 +243,22 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 ---
 
-## Feature 9: Aider Integration
+## Feature 10: Unknown Agent Handling
 
-> Auth preset for Aider — env-var only, supports both Anthropic and OpenAI keys.
+> ~~Graceful degradation for unrecognised agent values.~~ Implemented: unknown agent values are rejected early with a clear error listing valid agents.
 
-- [ ] **Design**
-  - [ ] No mount needed; auth via `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY`
-  - [ ] `config.agent = "aider"` ensures both keys are included in env pass-through if present
+- [x] **Design**
+  - [x] Unknown agent: error early before any side effects; list valid options
+  - [x] `validate_agent()` runs before worktree/tmux/container creation
 
-- [ ] **Tests**
-  - [ ] `resolve_agent_auth_mount("aider")` returns `None`
-  - [ ] `build_run_command` includes both API key env vars when aider preset active
+- [x] **Tests**
+  - [x] `validate_agent("unknown-thing")` returns an error with valid agent list
+  - [x] `am start` with unknown agent fails before any side effects
 
-- [ ] **Implementation**
-  - [ ] `aider` branch in `resolve_agent_auth_mount()` (returns `None`)
-  - [ ] Both `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` added to env pass-through
+- [x] **Implementation**
+  - [x] Catch-all branch in `validate_agent()` returns `ConfigError` with valid agent list
 
-- [ ] **UX Review** — `am start feat --agent aider` passes the correct API keys into the container
-
----
-
-## Feature 10: Unknown Agent Preset Handling
-
-> Graceful degradation for unrecognised agent presets.
-
-- [ ] **Design**
-  - [ ] Unknown preset: log a warning, proceed without auth mount
-  - [ ] User's `container.env` pass-through may still handle auth
-
-- [ ] **Tests**
-  - [ ] `resolve_agent_auth_mount("unknown-thing")` returns `None` and emits a warning
-  - [ ] `am start` with unknown preset succeeds with a warning, not an error
-
-- [ ] **Implementation**
-  - [ ] Catch-all branch in `resolve_agent_auth_mount()` with `eprintln!` warning
-
-- [ ] **UX Review** — typo in agent preset shows a clear warning and still starts the session
+- [x] **UX Review** — typo in agent name shows a clear error with valid options; session is NOT partially created
 
 ---
 
@@ -387,7 +367,8 @@ wording. No conditional `if is_in_tmux()` checks scattered through command handl
 - [x] **Feature 4: Claude Code Integration** — `~/.claude` mount preset, auto-launch in container
 - [x] **Feature 5: Docker Support** — runtime fallback, no `,z` labels
 - [x] **Feature 6: Copilot Integration** — `Dockerfile.copilot` with gh + `@github/copilot`; `~/.config/gh` mount preset
-- [x] **Feature 11: jj Workspace Support** — `create/remove_jj_workspace`, VCS dispatch in `am start`/`am clean` — `Dockerfile.copilot` with gh + `@github/copilot`; `~/.config/gh` mount preset
+- [x] **Feature 10: Unknown Agent Handling** — early validation rejects unknown agents with clear error + valid agent list
+- [x] **Feature 11: jj Workspace Support** — `create/remove_jj_workspace`, VCS dispatch in `am start`/`am clean`
 
 ---
 

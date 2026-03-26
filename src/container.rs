@@ -108,7 +108,7 @@ pub fn resolve_mounts(
     slug: &str,
     repo_root: &Path,
     vcs: &Vcs,
-    agent_preset: Option<&str>,
+    agent: Option<&str>,
 ) -> Result<ContainerMounts> {
     let home = home_dir()?;
     let worktree_host = repo_root.join(".am").join("worktrees").join(slug);
@@ -118,17 +118,17 @@ pub fn resolve_mounts(
     };
     let gitconfig_host = home.join(".gitconfig");
     let ssh_host = home.join(".ssh");
-    let agent_auth = agent_preset.map(resolve_agent_auth_mount).unwrap_or_default();
+    let agent_auth = agent.map(resolve_agent_auth_mount).unwrap_or_default();
 
     Ok(ContainerMounts { worktree_host, vcs_host, gitconfig_host, ssh_host, agent_auth })
 }
 
-pub fn resolve_agent_auth_mount(agent_preset: &str) -> Vec<AgentAuthMount> {
+pub fn resolve_agent_auth_mount(agent: &str) -> Vec<AgentAuthMount> {
     let home = match home_dir() {
         Ok(h) => h,
         Err(_) => return vec![],
     };
-    match agent_preset {
+    match agent {
         "claude" => {
             // Config dir: use CLAUDE_CONFIG_DIR if set, otherwise ~/.claude
             let config_host = std::env::var("CLAUDE_CONFIG_DIR")
@@ -758,7 +758,7 @@ mod tests {
     }
 
     #[test]
-    fn codex_and_aider_presets_return_no_mount() {
+    fn codex_and_aider_return_no_mount() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
