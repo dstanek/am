@@ -290,31 +290,6 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 ---
 
-## Feature 12: Lifecycle & Notifications
-
-> `am done` command, OS notifications, and session status tracking.
-
-- [ ] **Design**
-  - [ ] `notify-rust` graceful degradation (warn + continue on D-Bus failure)
-  - [ ] `am done` notification format: `"✅ <slug> is done"` or with `--message`
-  - [ ] `SessionStatus::Active` vs `Done` — `am list` shows both
-  - [ ] Future: auto-trigger on agent pane exit (out of scope for v1, noted)
-
-- [ ] **Tests**
-  - [ ] `notify.rs`: send does not panic when notification system unavailable
-  - [ ] `session.rs`: `update_session_status` persists correctly
-  - [ ] `am done` updates status and triggers notification
-  - [ ] `am list` shows `done` status in output
-
-- [ ] **Implementation**
-  - [ ] `src/notify.rs` — `send()` with graceful error handling
-  - [ ] `am done <slug> [--message]` fully implemented
-  - [ ] `am list` status column (active / done)
-
-- [ ] **UX Review** — `am done feat` sends a desktop notification and updates list output
-
----
-
 ## Feature 13: Polish & Distribution
 
 > Slug validation hardening, global config support, full test coverage, README.
@@ -327,7 +302,6 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 - [ ] **Tests**
   - [ ] Integration: `am start` → `am list` → `am clean` full flow
-  - [ ] Integration: `am start` → `am done` → `am list` shows done status
   - [ ] Slug validation: boundary conditions (1 char, 40 chars, 41 chars, invalid chars)
   - [ ] Global config loaded when project config absent
 
@@ -381,7 +355,7 @@ Track design decisions made during implementation:
 | 1 | Window naming collision | Error + tell user to run `am clean` | tmux |
 | 2 | Branch base | Current `HEAD` | git worktree |
 | 3 | Split ratio | Configurable `split_percent`, default 50 | tmux |
-| 4 | `am done` trigger | Manual only in v1; auto-watch is v2 | lifecycle |
+| 4 | `am done` / lifecycle notifications | Removed `am done`; deferred to v2 as automatic pane-exit detection + OS notification | lifecycle |
 | 5 | Container startup delay | Configurable `startup_delay_ms`, default 500 | Podman |
 | 6 | SELinux `,z` | Linux + Podman only | Podman |
 | 7 | Container name collision | `podman rm -f am-<slug>` before launch, log warning | Podman |

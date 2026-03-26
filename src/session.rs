@@ -6,13 +6,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::AmError;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum SessionStatus {
-    Active,
-    Done,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionContainer {
     pub runtime: String,
@@ -29,7 +22,6 @@ pub struct Session {
     pub agent_pane: String,
     pub shell_pane: String,
     pub created_at: DateTime<Utc>,
-    pub status: SessionStatus,
     pub container: Option<SessionContainer>,
 }
 
@@ -90,16 +82,6 @@ pub fn remove_session(repo_root: &Path, slug: &str) -> Result<()> {
     save_sessions(repo_root, &sessions)
 }
 
-pub fn update_session_status(repo_root: &Path, slug: &str, status: SessionStatus) -> Result<()> {
-    let mut sessions = load_sessions(repo_root)?;
-    let session = sessions
-        .iter_mut()
-        .find(|s| s.slug == slug)
-        .ok_or_else(|| AmError::SlugNotFound(slug.to_string()))?;
-    session.status = status;
-    save_sessions(repo_root, &sessions)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -114,7 +96,6 @@ mod tests {
             agent_pane: format!("am-{slug}.0"),
             shell_pane: format!("am-{slug}.1"),
             created_at: Utc::now(),
-            status: SessionStatus::Active,
             container: None,
         }
     }
@@ -170,24 +151,6 @@ mod tests {
     fn remove_nonexistent_slug_errors() {
         let tmp = TempDir::new().unwrap();
         let err = remove_session(tmp.path(), "ghost").unwrap_err();
-        assert!(err.to_string().contains("ghost"));
-    }
-
-    #[test]
-    fn update_session_status_persists() {
-        let tmp = TempDir::new().unwrap();
-        add_session(tmp.path(), make_session("feat")).unwrap();
-
-        update_session_status(tmp.path(), "feat", SessionStatus::Done).unwrap();
-
-        let sessions = load_sessions(tmp.path()).unwrap();
-        assert_eq!(sessions[0].status, SessionStatus::Done);
-    }
-
-    #[test]
-    fn update_nonexistent_session_errors() {
-        let tmp = TempDir::new().unwrap();
-        let err = update_session_status(tmp.path(), "ghost", SessionStatus::Done).unwrap_err();
         assert!(err.to_string().contains("ghost"));
     }
 

@@ -27,7 +27,6 @@ am/
 │   ├── worktree.rs
 │   ├── tmux.rs
 │   ├── container.rs
-│   ├── notify.rs
 │   ├── session.rs
 │   └── error.rs
 └── tests/
@@ -52,7 +51,6 @@ path = "src/main.rs"
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 git2 = "0.19"
-notify-rust = "4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
@@ -123,7 +121,6 @@ Managed automatically. Not user-edited.
       "agent_pane": "am-feat.0",
       "shell_pane": "am-feat.1",
       "created_at": "2025-01-01T00:00:00Z",
-      "status": "active",
       "container": {
         "enabled": true,
         "runtime": "podman",
@@ -315,29 +312,6 @@ pub fn kill_window(window_name: &str) -> anyhow::Result<()>
 pub fn get_pane_id(window_name: &str, index: usize) -> String
 ```
 - Returns `"<window_name>.<index>"` — e.g. `"am-feat.0"`
-
----
-
-### `notify.rs`
-
-**Responsibilities:**
-- Send a native OS notification with a title and body
-
-```rust
-pub fn send(title: &str, body: &str) -> anyhow::Result<()>
-```
-
-Uses `notify-rust`. Example:
-
-```rust
-notify_rust::Notification::new()
-    .summary(title)
-    .body(body)
-    .icon("terminal")
-    .show()?;
-```
-
-Handle gracefully on systems where notifications are unavailable (log a warning, don't panic).
 
 ---
 
@@ -549,7 +523,6 @@ pub struct Session {
     pub agent_pane: String,
     pub shell_pane: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
-    pub status: SessionStatus,           // enum: Active | Done
     pub container: Option<SessionContainer>,
 }
 
@@ -564,7 +537,6 @@ pub fn save_sessions(repo_root: &Path, sessions: &[Session]) -> anyhow::Result<(
 pub fn find_session<'a>(sessions: &'a [Session], slug: &str) -> Option<&'a Session>
 pub fn add_session(repo_root: &Path, session: Session) -> anyhow::Result<()>
 pub fn remove_session(repo_root: &Path, slug: &str) -> anyhow::Result<()>
-pub fn update_session_status(repo_root: &Path, slug: &str, status: SessionStatus) -> anyhow::Result<()>
 ```
 
 ---
@@ -600,14 +572,6 @@ pub enum Cli {
     /// Attach tmux focus to an existing session
     Attach {
         slug: String,
-    },
-
-    /// Mark a session as done and send a notification
-    Done {
-        slug: String,
-        /// Optional message to include in the notification
-        #[arg(short, long)]
-        message: Option<String>,
     },
 
     /// Launch an agent in an existing session's agent pane
@@ -704,17 +668,6 @@ If no sessions, print `No active sessions. Run 'am start <slug>' to begin.`
 
 ---
 
-### `am done <slug> [--message <msg>]`
-
-1. Load sessions; error if slug not found
-2. Update session status to `Done` in `sessions.json`
-3. Send notification:
-   - Title: `"Agent Manager"`
-   - Body: `"✅ <slug> is done"` or `"✅ <slug>: <message>"` if `--message` provided
-4. Print confirmation
-
----
-
 ### `am run <slug> <agent>`
 
 1. Load sessions; error if slug not found
@@ -772,8 +725,7 @@ Slugs must:
 
 - `cargo build --release` produces a single binary at `target/release/am`
 - Target platforms: macOS (arm64 + x86_64), Linux (x86_64), Windows (x86_64)
-- No runtime dependencies; `notify-rust` links statically on Linux against `libdbus`
-  (document the `dbus-devel` / `libdbus-1-dev` build dependency for Linux)
+- No runtime dependencies beyond the OS
 
 ---
 
@@ -801,7 +753,6 @@ Slugs must:
 
 ### Phase 4 — Lifecycle
 - `am list` (with container column)
-- `am done` + `notify.rs`
 - Full `am clean`
 
 ### Phase 5 — Polish
@@ -813,7 +764,7 @@ Slugs must:
 
 ### Future (v2)
 - Per-session SSH deploy key generation and injection (replaces `~/.ssh` mount)
-- `am done` auto-trigger via agent pane exit watching
+- Agent completion detection via pane exit watching + OS notifications
 - Hooks (run user-defined commands on session lifecycle events)
 
 ---
@@ -830,8 +781,7 @@ Slugs must:
 3. **Pane layout** — the spec defaults to a 50/50 horizontal split. Should the split
    ratio be configurable? **Suggested default:** add `split_percent = 50` to `TmuxConfig`.
 
-4. **`am done` trigger** — today `am done` is manual. A future enhancement could watch
-   the agent pane for an exit signal and auto-trigger. Out of scope for v1.
+4. **Agent completion notifications** — deferred to v2. Requires automatic detection of agent pane exit or waiting-for-input state. `am done` command removed as it had no clear utility.
 
 5. **Container startup delay** — after `podman run` is sent to the agent pane, a 500ms
    delay is used before sending the agent launch command. This is a heuristic.

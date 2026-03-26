@@ -49,15 +49,6 @@ pub enum Commands {
         slug: String,
     },
 
-    /// Mark a session as done and send a notification
-    Done {
-        #[arg(value_parser = validate_slug)]
-        slug: String,
-        /// Optional message to include in the notification
-        #[arg(short, long)]
-        message: Option<String>,
-    },
-
     /// Launch an agent in an existing session's agent pane
     Run {
         #[arg(value_parser = validate_slug)]

@@ -29,10 +29,6 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         }
         Commands::List => cmd_list(),
         Commands::Attach { slug } => cmd_attach(&slug),
-        Commands::Done { slug, message: _ } => {
-            eprintln!("am done {slug} (not yet implemented)");
-            Ok(())
-        }
         Commands::Run { slug, agent } => cmd_run(&slug, &agent),
         Commands::Clean { slug, force } => cmd_clean(&slug, force),
     }
@@ -202,7 +198,6 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, _editor: Option<&str>, no_con
         agent_pane: format!("am-{slug}.0"),
         shell_pane: format!("am-{slug}.1"),
         created_at: chrono::Utc::now(),
-        status: session::SessionStatus::Active,
         container: session_container,
     };
     session::add_session(&repo_root, new_session)?;
@@ -231,22 +226,17 @@ fn cmd_list() -> anyhow::Result<()> {
     let path_w = sessions.iter().map(|s| s.worktree_path.display().to_string().len()).max().unwrap_or(8).max(8);
 
     println!(
-        "{:<slug_w$}  {:<8}  {:<9}  {:<path_w$}  {:<10}  CREATED",
-        "SLUG", "STATUS", "CONTAINER", "WORKTREE", "WINDOW",
+        "{:<slug_w$}  {:<9}  {:<path_w$}  {:<10}  CREATED",
+        "SLUG", "CONTAINER", "WORKTREE", "WINDOW",
     );
-    println!("{}", "-".repeat(slug_w + 8 + 9 + path_w + 10 + 19 + 10));
+    println!("{}", "-".repeat(slug_w + 9 + path_w + 10 + 19 + 8));
 
     for s in &sessions {
-        let status = match s.status {
-            session::SessionStatus::Active => "active",
-            session::SessionStatus::Done => "done",
-        };
         let container = s.container.as_ref().map(|c| c.runtime.as_str()).unwrap_or("—");
         let created = s.created_at.format("%Y-%m-%d %H:%M").to_string();
         println!(
-            "{:<slug_w$}  {:<8}  {:<9}  {:<path_w$}  {:<10}  {}",
+            "{:<slug_w$}  {:<9}  {:<path_w$}  {:<10}  {}",
             s.slug,
-            status,
             container,
             s.worktree_path.display(),
             s.tmux_window,
