@@ -60,6 +60,60 @@ pub fn create_git_worktree(slug: &str, repo_root: &Path) -> Result<PathBuf> {
     Ok(worktree_path)
 }
 
+/// Resolve the `jj` binary path, respecting the `AM_JJ_BIN` env override.
+fn jj_bin() -> Result<PathBuf> {
+    if let Ok(path) = std::env::var("AM_JJ_BIN") {
+        let p = PathBuf::from(path);
+        if p.exists() {
+            return Ok(p);
+        }
+        return Err(AmError::WorktreeError("jj binary not found (AM_JJ_BIN is set but does not exist)".to_string()).into());
+    }
+    which::which("jj").map_err(|_| AmError::WorktreeError(
+        "jj not found on PATH — install from https://jj-vcs.github.io/jj/".to_string()
+    ).into())
+}
+
+/// Run a `jj` subcommand with the given args, returning an error on non-zero exit.
+fn run_jj(args: &[&str]) -> Result<()> {
+    let bin = jj_bin()?;
+    let output = std::process::Command::new(&bin)
+        .args(args)
+        .output()
+        .map_err(|e| AmError::WorktreeError(format!("failed to run jj: {e}")))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(AmError::WorktreeError(if stderr.is_empty() {
+            format!("jj exited with status {}", output.status)
+        } else {
+            stderr
+        }).into());
+    }
+    Ok(())
+}
+
+/// Create a jj workspace for `slug` at `<repo-root>/.am/worktrees/<slug>`.
+pub fn create_jj_workspace(slug: &str, repo_root: &Path) -> Result<PathBuf> {
+    let worktree_path = repo_root.join(".am").join("worktrees").join(slug);
+    if let Some(parent) = worktree_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let path_str = worktree_path.to_string_lossy();
+    run_jj(&["workspace", "add", &path_str, "--name", slug])?;
+    Ok(worktree_path)
+}
+
+/// Remove the jj workspace for `slug` and delete the workspace directory.
+pub fn remove_jj_workspace(slug: &str, repo_root: &Path) -> Result<()> {
+    run_jj(&["workspace", "forget", slug])?;
+    let worktree_path = repo_root.join(".am").join("worktrees").join(slug);
+    if worktree_path.exists() {
+        std::fs::remove_dir_all(&worktree_path)
+            .map_err(|e| AmError::WorktreeError(format!("failed to remove directory: {e}")))?;
+    }
+    Ok(())
+}
+
 /// Remove the git worktree for `slug` and delete the `am/<slug>` branch.
 pub fn remove_git_worktree(slug: &str, repo_root: &Path) -> Result<()> {
     let repo = Repository::open(repo_root)
@@ -95,7 +149,10 @@ pub fn remove_git_worktree(slug: &str, repo_root: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use tempfile::TempDir;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     /// Init a repo and make an initial commit so HEAD exists.
     fn init_repo_with_commit(dir: &Path) {
@@ -139,6 +196,111 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let err = detect_vcs(tmp.path()).unwrap_err();
         assert!(err.to_string().contains("repository"));
+    }
+
+    // ── jj helpers ────────────────────────────────────────────────────────────
+
+    /// Create a fake `jj` script that logs its args and exits 0.
+    fn fake_jj(dir: &Path) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let bin = dir.join("jj");
+        std::fs::write(
+            &bin,
+            "#!/bin/sh\necho \"$*\" >> \"$AM_JJ_LOG\"\n",
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&bin).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&bin, perms).unwrap();
+        bin
+    }
+
+    fn read_jj_log(log: &Path) -> String {
+        std::fs::read_to_string(log).unwrap_or_default()
+    }
+
+    #[test]
+    fn create_jj_workspace_runs_correct_command() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let tmp = TempDir::new().unwrap();
+        let bin = fake_jj(tmp.path());
+        let log = tmp.path().join("jj.log");
+        std::env::set_var("AM_JJ_BIN", &bin);
+        std::env::set_var("AM_JJ_LOG", &log);
+
+        let repo_root = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo_root).unwrap();
+        create_jj_workspace("feat", &repo_root).unwrap();
+
+        let out = read_jj_log(&log);
+        assert!(out.contains("workspace"), "expected 'workspace': {out}");
+        assert!(out.contains("add"), "expected 'add': {out}");
+        assert!(out.contains("feat"), "expected slug 'feat': {out}");
+
+        std::env::remove_var("AM_JJ_BIN");
+        std::env::remove_var("AM_JJ_LOG");
+    }
+
+    #[test]
+    fn create_jj_workspace_returns_correct_path() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let tmp = TempDir::new().unwrap();
+        let bin = fake_jj(tmp.path());
+        let log = tmp.path().join("jj.log");
+        std::env::set_var("AM_JJ_BIN", &bin);
+        std::env::set_var("AM_JJ_LOG", &log);
+
+        let repo_root = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo_root).unwrap();
+        let path = create_jj_workspace("feat", &repo_root).unwrap();
+
+        assert_eq!(path, repo_root.join(".am").join("worktrees").join("feat"));
+
+        std::env::remove_var("AM_JJ_BIN");
+        std::env::remove_var("AM_JJ_LOG");
+    }
+
+    #[test]
+    fn remove_jj_workspace_calls_forget_and_removes_directory() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let tmp = TempDir::new().unwrap();
+        let bin = fake_jj(tmp.path());
+        let log = tmp.path().join("jj.log");
+        std::env::set_var("AM_JJ_BIN", &bin);
+        std::env::set_var("AM_JJ_LOG", &log);
+
+        let repo_root = tmp.path().join("repo");
+        let worktree_path = repo_root.join(".am").join("worktrees").join("feat");
+        std::fs::create_dir_all(&worktree_path).unwrap();
+
+        remove_jj_workspace("feat", &repo_root).unwrap();
+
+        let out = read_jj_log(&log);
+        assert!(out.contains("workspace"), "expected 'workspace': {out}");
+        assert!(out.contains("forget"), "expected 'forget': {out}");
+        assert!(out.contains("feat"), "expected slug 'feat': {out}");
+        assert!(!worktree_path.exists(), "worktree directory should be removed");
+
+        std::env::remove_var("AM_JJ_BIN");
+        std::env::remove_var("AM_JJ_LOG");
+    }
+
+    #[test]
+    fn remove_jj_workspace_succeeds_when_directory_already_gone() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let tmp = TempDir::new().unwrap();
+        let bin = fake_jj(tmp.path());
+        let log = tmp.path().join("jj.log");
+        std::env::set_var("AM_JJ_BIN", &bin);
+        std::env::set_var("AM_JJ_LOG", &log);
+
+        let repo_root = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo_root).unwrap();
+        // Directory does not exist — should not error
+        remove_jj_workspace("feat", &repo_root).unwrap();
+
+        std::env::remove_var("AM_JJ_BIN");
+        std::env::remove_var("AM_JJ_LOG");
     }
 
     #[test]

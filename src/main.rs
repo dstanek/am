@@ -103,6 +103,9 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, _editor: Option<&str>, no_con
         .or_else(|| cfg.container.agent.clone())
         .or_else(|| cfg.agent.clone());
 
+    // Detect VCS up front — used for both worktree creation and container mounts
+    let vcs = worktree::detect_vcs(&repo_root)?;
+
     // Resolve container settings
     let use_container = cfg.container.enabled && !no_container;
     let (runtime, container_cmd, session_container) = if use_container {
@@ -115,13 +118,7 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, _editor: Option<&str>, no_con
         // Pre-emptively remove any leftover container from a previous run
         container::remove_if_exists(&runtime, &format!("am-{slug}"));
 
-        let vcs = worktree::detect_vcs(&repo_root)?;
-        let mounts = container::resolve_mounts(
-            slug,
-            &repo_root,
-            &vcs,
-            effective_agent.as_deref(),
-        )?;
+        let mounts = container::resolve_mounts(slug, &repo_root, &vcs, effective_agent.as_deref())?;
 
         let extra_env: Vec<(&str, &str)> = vec![];
         let mut cmd = container::build_run_command(
@@ -151,7 +148,10 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, _editor: Option<&str>, no_con
         (None, None, None)
     };
 
-    let worktree_path = worktree::create_git_worktree(slug, &repo_root)?;
+    let worktree_path = match vcs {
+        config::Vcs::Git => worktree::create_git_worktree(slug, &repo_root)?,
+        config::Vcs::Jj => worktree::create_jj_workspace(slug, &repo_root)?,
+    };
     let window_name = format!("am-{slug}");
 
     if tmux::is_in_tmux() {
@@ -343,7 +343,12 @@ fn cmd_clean(slug: &str, force: bool) -> anyhow::Result<()> {
     let _ = tmux::kill_window(&format!("am-{slug}"));
 
     // Remove worktree — warn but continue if it's already gone
-    if let Err(e) = worktree::remove_git_worktree(slug, &repo_root) {
+    let vcs = worktree::detect_vcs(&repo_root).unwrap_or(config::Vcs::Git);
+    let remove_result = match vcs {
+        config::Vcs::Git => worktree::remove_git_worktree(slug, &repo_root),
+        config::Vcs::Jj => worktree::remove_jj_workspace(slug, &repo_root),
+    };
+    if let Err(e) = remove_result {
         eprintln!("warning: could not fully remove worktree: {e}");
     }
 

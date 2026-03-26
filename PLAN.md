@@ -286,27 +286,27 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 > Jujutsu (jj) as an alternative VCS — workspace creation and container mount layout.
 
-- [ ] **Design**
-  - [ ] Detection: `.jj/` directory at repo root → `Vcs::Jj`
-  - [ ] `jj workspace add .am/worktrees/<slug> --name <slug>`
-  - [ ] `jj workspace forget <slug>` + directory delete on remove
-  - [ ] Container mount layout: mirror host path structure (`.jj` at repo root, worktree at sub-path)
-  - [ ] No `GIT_DIR`/`GIT_WORK_TREE` env vars needed for jj
+- [x] **Design**
+  - [x] Detection: `.jj/` directory at repo root → `Vcs::Jj`
+  - [x] `jj workspace add .am/worktrees/<slug> --name <slug>`
+  - [x] `jj workspace forget <slug>` + directory delete on remove
+  - [x] Container mount layout: mirror host path structure (`.jj` at repo root, worktree at sub-path)
+  - [x] No `GIT_DIR`/`GIT_WORK_TREE` env vars needed for jj
 
-- [ ] **Tests**
-  - [ ] `detect_vcs` returns `Jj` when `.jj/` present
-  - [ ] `create_jj_workspace` shells out correct `jj` command
-  - [ ] `remove_jj_workspace` calls `jj workspace forget` then removes directory
-  - [ ] `resolve_mounts` for jj produces correct container paths (`/mainrepo/...`)
-  - [ ] `build_run_command` sets correct `--workdir` for jj sessions
+- [x] **Tests**
+  - [x] `detect_vcs` returns `Jj` when `.jj/` present
+  - [x] `create_jj_workspace` shells out correct `jj` command
+  - [x] `remove_jj_workspace` calls `jj workspace forget` then removes directory
+  - [x] `resolve_mounts` for jj produces correct container paths
+  - [x] `build_run_command` sets correct `--workdir` for jj sessions
 
-- [ ] **Implementation**
-  - [ ] `create_jj_workspace()` and `remove_jj_workspace()` in `worktree.rs`
-  - [ ] jj mount layout in `resolve_mounts()`
-  - [ ] `detect_vcs` updated to check `.jj` before `.git`
-  - [ ] `am start` and `am clean` use VCS-appropriate functions
+- [x] **Implementation**
+  - [x] `create_jj_workspace()` and `remove_jj_workspace()` in `worktree.rs`
+  - [x] jj mount layout in `resolve_mounts()`
+  - [x] `detect_vcs` updated to check `.jj` before `.git`
+  - [x] `am start` and `am clean` use VCS-appropriate functions
 
-- [ ] **UX Review** — `am start feat` in a jj repo creates a workspace; container mounts are correct; `am clean feat` tears down cleanly
+- [x] **UX Review** — `am start feat` in a jj repo creates a workspace; container mounts are correct; `am clean feat` tears down cleanly
 
 ---
 
@@ -387,6 +387,7 @@ wording. No conditional `if is_in_tmux()` checks scattered through command handl
 - [x] **Feature 4: Claude Code Integration** — `~/.claude` mount preset, auto-launch in container
 - [x] **Feature 5: Docker Support** — runtime fallback, no `,z` labels
 - [x] **Feature 6: Copilot Integration** — `Dockerfile.copilot` with gh + `@github/copilot`; `~/.config/gh` mount preset
+- [x] **Feature 11: jj Workspace Support** — `create/remove_jj_workspace`, VCS dispatch in `am start`/`am clean` — `Dockerfile.copilot` with gh + `@github/copilot`; `~/.config/gh` mount preset
 
 ---
 
