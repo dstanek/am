@@ -283,8 +283,19 @@ pub fn remove_container(runtime: &ContainerRuntime, container_name: &str) -> Res
 
 /// Pre-emptively remove a container with this name (e.g. from a crashed
 /// previous session), logging a warning if one existed.
+/// NOTE: `podman/docker rm --force` exits 0 even when the container doesn't
+/// exist, so we check existence first to avoid false-positive warnings.
 pub fn remove_if_exists(runtime: &ContainerRuntime, container_name: &str) {
-    if run_container_cmd(runtime, &["rm", "-f", container_name]).is_ok() {
+    let exists = std::process::Command::new(&runtime.bin)
+        .args(["container", "inspect", container_name])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if exists {
+        let _ = run_container_cmd(runtime, &["rm", "-f", container_name]);
         eprintln!(
             "warning: removed existing container '{container_name}' from a previous unclean run"
         );
