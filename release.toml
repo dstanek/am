@@ -1,0 +1,22 @@
+# cargo-release configuration
+# https://github.com/crate-ci/cargo-release/blob/master/docs/reference.md
+
+[workspace]
+
+# Don't publish to crates.io
+publish = false
+
+# Git operations
+push = true
+push-remote = "origin"
+tag = true
+tag-name = "v{{version}}"
+tag-message = "Release v{{version}}"
+sign-commit = false
+sign-tag = false
+
+# Update CHANGELOG.md via git-cliff before committing
+pre-release-hook = ["git-cliff", "--bump", "-o", "CHANGELOG.md"]
+
+# Commit message (conventional commits format)
+pre-release-commit-message = "chore(release): v{{version}}"

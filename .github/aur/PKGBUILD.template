@@ -1,0 +1,35 @@
+# Maintainer: David Stanek <dstanek@dstanek.com>
+pkgname=am-agent-manager
+pkgver={{VERSION}}
+pkgrel=1
+pkgdesc="Creates isolated environments for coding agents"
+arch=('x86_64' 'aarch64')
+url="https://github.com/dstanek/am"
+license=('MIT')
+depends=()
+provides=('am')
+conflicts=('am')
+
+source_x86_64=("$pkgname-$pkgver-x86_64.tar.gz::https://github.com/dstanek/am/releases/download/v$pkgver/am-x86_64-unknown-linux-gnu.tar.gz")
+source_aarch64=("$pkgname-$pkgver-aarch64.tar.gz::https://github.com/dstanek/am/releases/download/v$pkgver/am-aarch64-unknown-linux-gnu.tar.gz")
+
+# Update these checksums on each release. Generate with:
+#   sha256sum am-x86_64-unknown-linux-gnu.tar.gz
+#   sha256sum am-aarch64-unknown-linux-gnu.tar.gz
+sha256sums_x86_64=('{{SHA_LINUX_X86}}')
+sha256sums_aarch64=('{{SHA_LINUX_ARM}}')
+
+package() {
+    install -Dm755 am "$pkgdir/usr/bin/am"
+    install -Dm644 /dev/stdin "$pkgdir/usr/share/licenses/$pkgname/LICENSE" <<EOF
+$(curl -sL "https://raw.githubusercontent.com/dstanek/am/v$pkgver/LICENSE")
+EOF
+}
+
+# TODO: Automate AUR updates by adding a job to .github/workflows/release.yml that:
+# 1. Stores an AUR SSH private key as a GitHub secret (AUR_SSH_KEY)
+# 2. After the GitHub Release is created, clones ssh://aur@aur.archlinux.org/am-agent-manager.git
+# 3. Renders this PKGBUILD with the new version and checksums
+# 4. Updates .SRCINFO via `makepkg --printsrcinfo > .SRCINFO`
+# 5. Commits and pushes to the AUR remote
+# See: https://github.com/marketplace/actions/update-aur-package

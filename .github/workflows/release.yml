@@ -1,0 +1,242 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary: am
+            archive: tar.gz
+            packages: true
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            binary: am
+            archive: tar.gz
+            packages: true
+          - os: macos-13
+            target: x86_64-apple-darwin
+            binary: am
+            archive: tar.gz
+            packages: false
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            binary: am
+            archive: tar.gz
+            packages: false
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary: am.exe
+            archive: zip
+            packages: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          ARTIFACT="am-${{ matrix.target }}"
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/${{ matrix.binary }} dist/
+          tar -C dist -czf "${ARTIFACT}.tar.gz" ${{ matrix.binary }}
+          echo "ARTIFACT_PATH=${ARTIFACT}.tar.gz" >> $GITHUB_ENV
+          echo "ARTIFACT_NAME=${ARTIFACT}" >> $GITHUB_ENV
+
+      - name: Package (zip)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $artifact = "am-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary }}" dist/
+          Compress-Archive -Path "dist/${{ matrix.binary }}" -DestinationPath "${artifact}.zip"
+          echo "ARTIFACT_PATH=${artifact}.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "ARTIFACT_NAME=${artifact}" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_PATH }}
+          if-no-files-found: error
+
+      - name: Install cargo-deb and cargo-generate-rpm
+        if: matrix.packages == true
+        run: |
+          cargo install cargo-deb
+          cargo install cargo-generate-rpm
+
+      - name: Build .deb
+        if: matrix.packages == true
+        run: |
+          cargo deb --target ${{ matrix.target }} --no-build
+          cp target/${{ matrix.target }}/debian/*.deb .
+
+      - name: Build .rpm
+        if: matrix.packages == true
+        run: |
+          cargo generate-rpm --target ${{ matrix.target }}
+          cp target/${{ matrix.target }}/generate-rpm/*.rpm .
+
+      - name: Upload .deb artifact
+        if: matrix.packages == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.target }}
+          path: "*.deb"
+          if-no-files-found: error
+
+      - name: Upload .rpm artifact
+        if: matrix.packages == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-${{ matrix.target }}
+          path: "*.rpm"
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: false
+
+      - name: Collect release files
+        run: |
+          mkdir -p release-files
+          find artifacts -type f \( \
+            -name "*.tar.gz" -o \
+            -name "*.zip" -o \
+            -name "*.deb" -o \
+            -name "*.rpm" \
+          \) -exec cp {} release-files/ \;
+          ls -la release-files/
+
+      - name: Extract release notes
+        id: notes
+        run: |
+          # Extract the first versioned section from CHANGELOG.md
+          NOTES=$(awk '
+            /^## \[/ { n++; if (n == 2) exit }
+            n == 1 && !/^## \[/ { print }
+          ' CHANGELOG.md | sed '/^[[:space:]]*$/d' | head -c 65536)
+          echo "NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "Release ${{ github.ref_name }}" \
+            --notes "${{ steps.notes.outputs.NOTES }}" \
+            release-files/*
+
+  homebrew:
+    name: Update Homebrew Tap
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download macOS aarch64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: am-aarch64-apple-darwin
+          path: artifacts
+
+      - name: Download macOS x86_64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: am-x86_64-apple-darwin
+          path: artifacts
+
+      - name: Download Linux x86_64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: am-x86_64-unknown-linux-gnu
+          path: artifacts
+
+      - name: Download Linux aarch64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: am-aarch64-unknown-linux-gnu
+          path: artifacts
+
+      - name: Compute checksums
+        run: |
+          echo "SHA_MAC_ARM=$(sha256sum artifacts/am-aarch64-apple-darwin.tar.gz | cut -d' ' -f1)" >> $GITHUB_ENV
+          echo "SHA_MAC_X86=$(sha256sum artifacts/am-x86_64-apple-darwin.tar.gz | cut -d' ' -f1)" >> $GITHUB_ENV
+          echo "SHA_LINUX_X86=$(sha256sum artifacts/am-x86_64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)" >> $GITHUB_ENV
+          echo "SHA_LINUX_ARM=$(sha256sum artifacts/am-aarch64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)" >> $GITHUB_ENV
+
+      - name: Clone tap repo
+        uses: actions/checkout@v4
+        with:
+          repository: dstanek/homebrew-am
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-am
+
+      - name: Render formula
+        run: |
+          VERSION=${{ needs.release.outputs.version }}
+          sed \
+            -e "s/{{VERSION}}/$VERSION/g" \
+            -e "s/{{SHA_MAC_ARM}}/$SHA_MAC_ARM/g" \
+            -e "s/{{SHA_MAC_X86}}/$SHA_MAC_X86/g" \
+            -e "s/{{SHA_LINUX_X86}}/$SHA_LINUX_X86/g" \
+            -e "s/{{SHA_LINUX_ARM}}/$SHA_LINUX_ARM/g" \
+            .github/homebrew/am.rb.template > homebrew-am/Formula/am.rb
+
+      - name: Open PR against tap repo
+        working-directory: homebrew-am
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION=${{ needs.release.outputs.version }}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "release/v${VERSION}"
+          git add Formula/am.rb
+          git commit -m "chore: update am to v${VERSION}"
+          git push origin "release/v${VERSION}"
+          gh pr create \
+            --title "Update am to v${VERSION}" \
+            --body "Automated formula update for [release v${VERSION}](https://github.com/dstanek/am/releases/tag/v${VERSION})." \
+            --repo dstanek/homebrew-am

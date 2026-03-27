@@ -1,0 +1,36 @@
+class Am < Formula
+  desc "Creates isolated environments for coding agents"
+  homepage "https://github.com/dstanek/am"
+  version "{{VERSION}}"
+  license "MIT"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/dstanek/am/releases/download/v{{VERSION}}/am-aarch64-apple-darwin.tar.gz"
+      sha256 "{{SHA_MAC_ARM}}"
+    end
+    on_intel do
+      url "https://github.com/dstanek/am/releases/download/v{{VERSION}}/am-x86_64-apple-darwin.tar.gz"
+      sha256 "{{SHA_MAC_X86}}"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://github.com/dstanek/am/releases/download/v{{VERSION}}/am-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "{{SHA_LINUX_ARM}}"
+    end
+    on_intel do
+      url "https://github.com/dstanek/am/releases/download/v{{VERSION}}/am-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "{{SHA_LINUX_X86}}"
+    end
+  end
+
+  def install
+    bin.install "am"
+  end
+
+  test do
+    system "#{bin}/am", "--version"
+  end
+end
