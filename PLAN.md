@@ -317,7 +317,7 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
   - [x] Remove unimplemented `editor` setting from `Config`, `FileDefaults`, CLI, and `config.md`
   - [x] Slug `value_parser` in `cli.rs` *(done in Feature 1)*
   - [x] `config.md` — full configuration reference with env var table and settings reference
-  - [ ] Full integration tests in `tests/`
+  - [x] Full integration tests in `tests/` — Gherkin/cucumber tests covering init, start, list, clean, generate-config, tmux, container, jj, error handling, and full flow
   - [ ] `cargo build --release` verified on target platforms
   - [ ] README with install + usage + example Dockerfile
   - [ ] Error messages reviewed for user-friendliness

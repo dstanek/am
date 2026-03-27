@@ -47,7 +47,16 @@ make build-copilot           # Build Copilot Docker image
 
 This repo uses **jj (Jujutsu)**. Use `jj` commands instead of `git` for all VCS operations.
 
-Commits use **Conventional Commits** format: `type(scope): description` (e.g., `feat(container): add Codex auth preset`, `fix(config): handle missing home dir`). After successfully implementing a feature, create a commit.
+Commits use **Conventional Commits** format: `type(scope): description` (e.g., `feat(container): add Codex auth preset`, `fix(config): handle missing home dir`). After successfully implementing a feature, create a commit using `jj commit -m "..."` (not `jj describe`) so the working copy is left clean and empty.
+
+Commit messages should end with a footer separated by `---`:
+
+```
+---
+Co-Piloted-By: am via Claude Code
+```
+
+Use the appropriate agent name in place of `Claude Code` (e.g., `GitHub Copilot`, `Gemini`, `Codex`, `Aider`).
 
 ## Key Reference Files
 
