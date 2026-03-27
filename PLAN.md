@@ -207,6 +207,7 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 ## Feature 7: Codex Integration
 
 > Auth preset for OpenAI Codex — env-var only, no filesystem mount.
+> Spec: [`specs/codex-integration.md`](specs/codex-integration.md)
 
 - [ ] **Design**
   - [ ] No mount needed; auth via `OPENAI_API_KEY` env var pass-through
@@ -227,6 +228,7 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 ## Feature 8: Gemini Integration
 
 > Auth mount preset for Google Gemini CLI.
+> Spec: [`specs/gemini-integration.md`](specs/gemini-integration.md)
 
 - [ ] **Design**
   - [ ] Preset: `~/.gemini:/root/.gemini:ro`
@@ -240,6 +242,27 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
   - [ ] `gemini` branch in `resolve_agent_auth_mount()`
 
 - [ ] **UX Review** — `am start feat --agent gemini` launches a container with `~/.gemini` mounted
+
+---
+
+## Feature 9: Aider Integration
+
+> Auth preset for Aider — env-var only (ANTHROPIC_API_KEY / OPENAI_API_KEY).
+> Spec: [`specs/aider-integration.md`](specs/aider-integration.md)
+
+- [ ] **Design**
+  - [ ] No mount needed; auth via `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` env var pass-through
+  - [ ] `config.agent = "aider"` ensures both keys are included in env pass-through
+
+- [ ] **Tests**
+  - [ ] `resolve_agent_auth_mount("aider")` returns `None`
+  - [ ] `build_run_command` includes `-e ANTHROPIC_API_KEY` and `-e OPENAI_API_KEY` when aider preset active
+
+- [ ] **Implementation**
+  - [ ] `aider` branch in `resolve_agent_auth_mount()` (returns `None`)
+  - [ ] Env var injection for both keys
+
+- [ ] **UX Review** — `am start feat --agent aider` passes both API key vars into the container; no spurious mount errors
 
 ---
 
@@ -291,6 +314,7 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 ---
 
 ## Feature 13: Polish & Distribution
+> Spec: [`specs/polish-and-distribution.md`](specs/polish-and-distribution.md)
 
 > Slug validation hardening, global config support, full test coverage, README.
 
@@ -329,6 +353,7 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 ## Bugs / Improvements Backlog
 
 ### Bug: Context-aware user messages
+> Spec: [`specs/context-aware-messages.md`](specs/context-aware-messages.md)
 
 Commands like `am clean` currently say "Remove worktree and kill tmux window" even when
 not running inside tmux. All user-facing strings should reflect the actual runtime context.
