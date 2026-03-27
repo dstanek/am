@@ -1,8 +1,6 @@
 # cargo-release configuration
 # https://github.com/crate-ci/cargo-release/blob/master/docs/reference.md
 
-[workspace]
-
 # Don't publish to crates.io
 publish = false
 
