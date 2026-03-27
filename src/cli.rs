@@ -32,9 +32,6 @@ pub enum Commands {
         /// Agent command to launch in the agent pane (overrides config)
         #[arg(short, long)]
         agent: Option<String>,
-        /// Editor/command to launch in the shell pane (overrides config)
-        #[arg(short, long)]
-        editor: Option<String>,
         /// Disable container isolation for this session (overrides config)
         #[arg(long)]
         no_container: bool,
@@ -65,6 +62,9 @@ pub enum Commands {
         #[arg(short, long)]
         force: bool,
     },
+
+    /// Print a global config template with all options and defaults to stdout
+    GenerateConfig,
 }
 
 #[cfg(test)]

@@ -295,19 +295,28 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 > Slug validation hardening, global config support, full test coverage, README.
 
 - [ ] **Design**
-  - [ ] Global config path: `~/.config/am/config.toml`
-  - [ ] Config merge order: global defaults → project `.am/config.toml` → CLI flags
-  - [ ] `am init` adds `.am/` to `.gitignore` (idempotent)
+  - [x] Global config path: `~/.config/am/config.toml`
+  - [x] Config merge order: compiled defaults → global → project → env vars → CLI flags
+  - [x] 12 `AM_*` environment variable overrides for all config keys (silently ignore unknown/malformed values)
+  - [x] `am init` adds `.am/` to `.gitignore` (idempotent) *(done in Feature 1)*
+  - [x] Project config writes all values commented-out so global defaults flow through; section headers remain active
   - [ ] Target platforms: macOS (arm64 + x86_64), Linux (x86_64)
 
 - [ ] **Tests**
+  - [x] Global config loaded when project config absent *(existing tests)*
+  - [x] Env vars override project config (`env_vars_override_project_config` in `config.rs`)
+  - [x] Slug validation: boundary conditions (1 char, 40 chars, 41 chars, invalid chars) *(done in Feature 1)*
   - [ ] Integration: `am start` → `am list` → `am clean` full flow
-  - [ ] Slug validation: boundary conditions (1 char, 40 chars, 41 chars, invalid chars)
-  - [ ] Global config loaded when project config absent
 
 - [ ] **Implementation**
-  - [ ] Global config path and loading in `config.rs`
-  - [ ] Slug `value_parser` in `cli.rs`
+  - [x] Global config path and loading in `config.rs`
+  - [x] `apply_env_vars()` in `config.rs` — all 12 `AM_*` overrides
+  - [x] `global_config_template()` returning fully-documented static config string
+  - [x] `am generate-config` command — prints global template to stdout
+  - [x] Project config (`am init`) rewritten as fully-commented template
+  - [x] Remove unimplemented `editor` setting from `Config`, `FileDefaults`, CLI, and `config.md`
+  - [x] Slug `value_parser` in `cli.rs` *(done in Feature 1)*
+  - [x] `config.md` — full configuration reference with env var table and settings reference
   - [ ] Full integration tests in `tests/`
   - [ ] `cargo build --release` verified on target platforms
   - [ ] README with install + usage + example Dockerfile
@@ -362,3 +371,5 @@ Track design decisions made during implementation:
 | 8 | `am attach` when no window | Creates window + split (create-or-attach), not an error | tmux |
 | 9 | Prompt to start tmux session from `am start` | Deferred to v2 | tmux |
 | 10 | Container launch outside tmux | `exec()` the container directly in the current shell (replaces `am` process) | Podman |
+| 11 | Config env var precedence | Env vars sit between project config and CLI flags; 12 `AM_*` vars cover all config keys; unknown/malformed values silently ignored | Feature 13 |
+| 12 | `editor` setting | Removed — was never implemented; no clear agent use-case justifies it | Feature 13 |

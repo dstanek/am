@@ -94,7 +94,6 @@ impl Default for ContainerConfig {
 pub struct Config {
     pub vcs: Vcs,
     pub agent: Option<String>,
-    pub editor: Option<String>,
     pub tmux: TmuxConfig,
     pub container: ContainerConfig,
 }
@@ -104,7 +103,6 @@ impl Default for Config {
         Self {
             vcs: Vcs::Git,
             agent: None,
-            editor: None,
             tmux: TmuxConfig::default(),
             container: ContainerConfig::default(),
         }
@@ -117,7 +115,6 @@ impl Default for Config {
 struct FileDefaults {
     vcs: Option<Vcs>,
     agent: Option<String>,
-    editor: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -155,11 +152,6 @@ fn apply_file_config(base: &mut Config, file: FileConfig) {
     if let Some(v) = file.defaults.agent {
         if !v.is_empty() {
             base.agent = Some(v);
-        }
-    }
-    if let Some(v) = file.defaults.editor {
-        if !v.is_empty() {
-            base.editor = Some(v);
         }
     }
     if let Some(v) = file.tmux.agent_pane {
@@ -217,32 +209,143 @@ fn dirs_path() -> Option<PathBuf> {
         .map(|h| PathBuf::from(h).join(".config").join("am"))
 }
 
-/// Write the default config file at `path` (creates parent directories as needed).
+/// Write the default project config file at `path` (creates parent directories as needed).
+/// The file is written as a fully-commented-out template so it never silently overrides
+/// global or compiled-in defaults.
 pub fn write_defaults(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let content = r#"[defaults]
-vcs = "git"            # "git" | "jj"
-agent = ""             # default agent, e.g. "claude"
-editor = ""            # default editor, e.g. "nvim"
+    let content = r#"# Project-level am configuration — .am/config.toml
+# Uncomment only the values you want to override from your global or compiled-in defaults.
+# Precedence (highest wins): CLI flags > environment variables > project config > global config
+# Run `am generate-config` to see the full global config template with all options documented.
+
+[defaults]
+# vcs = "git"            # "git" | "jj"
+# agent = ""             # default agent, e.g. "claude"
 
 [tmux]
-agent_pane = "left"    # "left" | "right"
-split = "horizontal"   # "horizontal" | "vertical"
-split_percent = 50
+# agent_pane = "left"    # which pane gets the agent: "left" | "right"
+# split = "horizontal"   # split direction: "horizontal" | "vertical"
+# split_percent = 50     # percentage of the window given to the agent pane
 
 [container]
-enabled = true
-runtime = "auto"       # "auto" | "podman" | "docker"
-image = "ubuntu:25.10"
-agent = ""
-network = "full"       # "full" | "none"
-env = []
-startup_delay_ms = 500
+# enabled = true
+# runtime = "auto"       # "auto" | "podman" | "docker"
+# image = "ubuntu:25.10" # container image to run
+# agent = ""             # agent for this project's containers (overrides defaults.agent)
+# network = "full"       # "full" | "none"
+# env = []               # extra environment variables to pass into the container
+# startup_delay_ms = 500 # ms to wait after container start before sending the agent command
 "#;
     std::fs::write(path, content)?;
     Ok(())
+}
+
+/// Returns the full global config template as a static string with all options active
+/// and documented with inline comments.
+pub fn global_config_template() -> &'static str {
+    r#"# am global configuration — ~/.config/am/config.toml
+# Sets machine-wide defaults for all projects.
+# Precedence (highest wins): CLI flags > environment variables > project config (.am/config.toml) > global config
+#
+# Environment variable overrides:
+#   AM_VCS, AM_AGENT
+#   AM_TMUX_AGENT_PANE, AM_TMUX_SPLIT, AM_TMUX_SPLIT_PERCENT
+#   AM_CONTAINER_ENABLED, AM_CONTAINER_RUNTIME, AM_CONTAINER_IMAGE,
+#   AM_CONTAINER_AGENT, AM_CONTAINER_NETWORK, AM_CONTAINER_STARTUP_DELAY_MS
+
+[defaults]
+vcs = "git"            # "git" | "jj"
+agent = ""             # default agent for all sessions, e.g. "claude", "codex", "gemini"
+
+[tmux]
+agent_pane = "left"    # which pane gets the agent: "left" | "right"
+split = "horizontal"   # split direction: "horizontal" | "vertical"
+split_percent = 50     # percentage of the window given to the agent pane (1-99)
+
+[container]
+enabled = true
+runtime = "auto"       # "auto" (podman first, then docker) | "podman" | "docker"
+image = "ubuntu:25.10" # container image; must be set when container.enabled = true
+agent = ""             # agent for containers (overrides defaults.agent in container context)
+network = "full"       # "full" (unrestricted) | "none" (no network access)
+env = []               # extra environment variables passed into the container, e.g. ["FOO=bar"]
+startup_delay_ms = 500 # ms to wait after container start before sending the agent command
+"#
+}
+
+/// Read environment variables and apply them to the config, silently ignoring unknown values.
+fn apply_env_vars(config: &mut Config) {
+    if let Ok(val) = std::env::var("AM_VCS") {
+        match val.as_str() {
+            "git" => config.vcs = Vcs::Git,
+            "jj" => config.vcs = Vcs::Jj,
+            _ => {}
+        }
+    }
+    if let Ok(val) = std::env::var("AM_AGENT") {
+        if !val.is_empty() {
+            config.agent = Some(val);
+        }
+    }
+    if let Ok(val) = std::env::var("AM_TMUX_AGENT_PANE") {
+        match val.as_str() {
+            "left" => config.tmux.agent_pane = PaneSide::Left,
+            "right" => config.tmux.agent_pane = PaneSide::Right,
+            _ => {}
+        }
+    }
+    if let Ok(val) = std::env::var("AM_TMUX_SPLIT") {
+        match val.as_str() {
+            "horizontal" => config.tmux.split = SplitDirection::Horizontal,
+            "vertical" => config.tmux.split = SplitDirection::Vertical,
+            _ => {}
+        }
+    }
+    if let Ok(val) = std::env::var("AM_TMUX_SPLIT_PERCENT") {
+        if let Ok(n) = val.parse::<u8>() {
+            config.tmux.split_percent = n;
+        }
+    }
+    if let Ok(val) = std::env::var("AM_CONTAINER_ENABLED") {
+        match val.to_lowercase().as_str() {
+            "true" | "1" | "yes" => config.container.enabled = true,
+            "false" | "0" | "no" => config.container.enabled = false,
+            _ => {}
+        }
+    }
+    if let Ok(val) = std::env::var("AM_CONTAINER_RUNTIME") {
+        match val.as_str() {
+            "auto" => config.container.runtime = RuntimePreference::Auto,
+            "podman" => config.container.runtime = RuntimePreference::Podman,
+            "docker" => config.container.runtime = RuntimePreference::Docker,
+            _ => {}
+        }
+    }
+    if let Ok(val) = std::env::var("AM_CONTAINER_IMAGE") {
+        if !val.is_empty() {
+            config.container.image = Some(val);
+        }
+    }
+    if let Ok(val) = std::env::var("AM_CONTAINER_AGENT") {
+        if !val.is_empty() {
+            config.container.agent = Some(val);
+        }
+    }
+    if let Ok(val) = std::env::var("AM_CONTAINER_NETWORK") {
+        match val.as_str() {
+            "full" => config.container.network = NetworkMode::Full,
+            "none" => config.container.network = NetworkMode::None,
+            _ => {}
+        }
+    }
+    if let Ok(val) = std::env::var("AM_CONTAINER_STARTUP_DELAY_MS") {
+        if let Ok(n) = val.parse::<u64>() {
+            config.container.startup_delay_ms = n;
+        }
+    }
 }
 
 /// Load config by merging global → project.
@@ -270,6 +373,9 @@ pub fn load_with_global(global_path: Option<&Path>, project_config_path: Option<
             apply_file_config(&mut config, file);
         }
     }
+
+    // Apply environment variable overrides (highest precedence after CLI flags)
+    apply_env_vars(&mut config);
 
     Ok(config)
 }
@@ -369,5 +475,36 @@ image = "myimage"
         let content = std::fs::read_to_string(&path).unwrap();
         let parsed: Result<toml::Value, _> = toml::from_str(&content);
         assert!(parsed.is_ok(), "default config is not valid TOML");
+    }
+
+    // Mutex to serialise all tests that mutate process-global env vars.
+    static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn env_vars_override_project_config() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        let tmp = TempDir::new().unwrap();
+
+        let project_path = write_toml(tmp.path(), "project.toml", r#"
+[defaults]
+agent = "claude"
+[container]
+image = "project-image"
+"#);
+
+        unsafe {
+            std::env::set_var("AM_AGENT", "codex");
+            std::env::set_var("AM_CONTAINER_IMAGE", "env-image");
+        }
+
+        let config = load_with_global(None, Some(&project_path)).unwrap();
+
+        unsafe {
+            std::env::remove_var("AM_AGENT");
+            std::env::remove_var("AM_CONTAINER_IMAGE");
+        }
+
+        assert_eq!(config.agent.as_deref(), Some("codex"));
+        assert_eq!(config.container.image.as_deref(), Some("env-image"));
     }
 }

@@ -24,13 +24,14 @@ fn main() {
 fn run(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
         Commands::Init => cmd_init(),
-        Commands::Start { slug, agent, editor, no_container } => {
-            cmd_start(&slug, agent.as_deref(), editor.as_deref(), no_container)
+        Commands::Start { slug, agent, no_container } => {
+            cmd_start(&slug, agent.as_deref(), no_container)
         }
         Commands::List => cmd_list(),
         Commands::Attach { slug } => cmd_attach(&slug),
         Commands::Run { slug, agent } => cmd_run(&slug, &agent),
         Commands::Clean { slug, force } => cmd_clean(&slug, force),
+        Commands::GenerateConfig => cmd_generate_config(),
     }
 }
 
@@ -78,7 +79,7 @@ fn cmd_init() -> anyhow::Result<()> {
 
 // ── am start ──────────────────────────────────────────────────────────────────
 
-fn cmd_start(slug: &str, agent_flag: Option<&str>, _editor: Option<&str>, no_container: bool) -> anyhow::Result<()> {
+fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool) -> anyhow::Result<()> {
     let repo_root = find_repo_root()?;
     let sessions = session::load_sessions(&repo_root)?;
 
@@ -353,6 +354,13 @@ fn cmd_clean(slug: &str, force: bool) -> anyhow::Result<()> {
     session::remove_session(&repo_root, slug)?;
 
     println!("Cleaned session '{slug}'.");
+    Ok(())
+}
+
+// ── am generate-config ────────────────────────────────────────────────────────
+
+fn cmd_generate_config() -> anyhow::Result<()> {
+    print!("{}", config::global_config_template());
     Ok(())
 }
 
