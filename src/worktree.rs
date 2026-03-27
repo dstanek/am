@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use git2::{BranchType, Repository, Signature, WorktreeAddOptions};
+use git2::{BranchType, Repository, WorktreeAddOptions};
 
 use crate::config::Vcs;
 use crate::error::AmError;

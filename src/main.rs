@@ -112,7 +112,7 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool) -> anyhow
 
     // 3. Container config
     let use_container = cfg.container.enabled && !no_container;
-    let (runtime, container_cmd, session_container) = if use_container {
+    let (_runtime, container_cmd, session_container) = if use_container {
         let image = cfg.container.image.as_deref()
             .filter(|s| !s.is_empty())
             .ok_or(error::AmError::ContainerImageNotConfigured)?;

@@ -348,13 +348,6 @@ fn apply_env_vars(config: &mut Config) {
     }
 }
 
-/// Load config by merging global → project.
-/// If neither file exists, returns compiled-in defaults.
-/// `override_global_path` is used in tests to inject an explicit global config path.
-pub fn load(project_config_path: Option<&Path>) -> Result<Config> {
-    load_with_global(global_config_path().as_deref(), project_config_path)
-}
-
 pub fn load_with_global(global_path: Option<&Path>, project_config_path: Option<&Path>) -> Result<Config> {
     let mut config = Config::default();
 
