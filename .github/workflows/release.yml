@@ -147,6 +147,14 @@ jobs:
           \) -exec cp {} release-files/ \;
           ls -la release-files/
 
+      - name: Generate checksums
+        run: |
+          cd release-files
+          for f in *.tar.gz *.zip *.deb *.rpm; do
+            [ -f "$f" ] && sha256sum "$f" > "${f}.sha256"
+          done
+          ls -la *.sha256
+
       - name: Extract release notes
         id: notes
         run: |
