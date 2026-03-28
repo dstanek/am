@@ -180,13 +180,24 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool) -> anyhow
         tmux::select_pane(&tmux::get_pane_id(&window_name, 0))?;
         tmux::select_window(&window_name)?;
     } else if let Some(ref cmd) = container_cmd {
-        // Not in tmux — exec the container directly, replacing this process
-        use std::os::unix::process::CommandExt;
-        let err = std::process::Command::new(&cmd[0])
-            .args(&cmd[1..])
-            .exec();
-        // exec() only returns on failure
-        return Err(error::AmError::ContainerError(format!("failed to exec container: {err}")).into());
+        // Not in tmux — run the container directly, replacing this process
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            let err = std::process::Command::new(&cmd[0])
+                .args(&cmd[1..])
+                .exec();
+            // exec() only returns on failure
+            return Err(error::AmError::ContainerError(format!("failed to exec container: {err}")).into());
+        }
+        #[cfg(not(unix))]
+        {
+            let status = std::process::Command::new(&cmd[0])
+                .args(&cmd[1..])
+                .status()
+                .map_err(|e| error::AmError::ContainerError(format!("failed to run container: {e}")))?;
+            std::process::exit(status.code().unwrap_or(1));
+        }
     } else {
         println!("Note: not inside tmux — no window opened. Run 'am attach {slug}' from inside tmux to open one.");
     }
