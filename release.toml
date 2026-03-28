@@ -4,6 +4,9 @@
 # Don't publish to crates.io
 publish = false
 
+# Allow release from detached HEAD (jj repos)
+allow-branch = ["HEAD", "*"]
+
 # Git operations
 push = true
 push-remote = "origin"
