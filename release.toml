@@ -17,7 +17,7 @@ sign-commit = false
 sign-tag = false
 
 # Update CHANGELOG.md via git-cliff before committing
-pre-release-hook = ["bash", "-lc", "git-cliff --bump -o CHANGELOG.md"]
+pre-release-hook = ["bash", "-c", "$HOME/.cargo/bin/git-cliff --bump -o CHANGELOG.md"]
 
 # Commit message (conventional commits format)
 pre-release-commit-message = "chore(release): v{{version}}"
