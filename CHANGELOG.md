@@ -1,3 +1,9 @@
+## [0.1.1] - 2026-03-28
+
+### 🐛 Bug Fixes
+
+- *(release)* Fix macos-13 runner deprecation and deb copyright warning
+- *(main)* Fix Windows build by gating unix-only exec() behind cfg(unix)
 ## [0.1.0] - 2026-03-28
 
 ### 🚀 Features
@@ -54,3 +60,4 @@
 - *(container)* Clean up error messages
 - Remove notification requirement
 - Add .am to the gitignore
+- *(release)* V0.1.0
