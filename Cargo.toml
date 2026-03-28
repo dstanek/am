@@ -3,6 +3,7 @@ name = "am"
 version = "0.1.0"
 edition = "2021"
 description = "Creates isolated environments for coding agents"
+authors = ["David Stanek"]
 license = "MIT"
 repository = "https://github.com/dstanek/am"
 

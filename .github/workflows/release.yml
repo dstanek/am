@@ -23,7 +23,7 @@ jobs:
             binary: am
             archive: tar.gz
             packages: true
-          - os: macos-13
+          - os: macos-latest
             target: x86_64-apple-darwin
             binary: am
             archive: tar.gz
