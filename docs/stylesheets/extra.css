@@ -1,0 +1,225 @@
+/* ============================================================
+   Hero section
+   ============================================================ */
+
+.hero {
+  text-align: center;
+  padding: 2rem 1rem 3rem;
+  border-bottom: 1px solid var(--md-primary-fg-color);
+  margin-bottom: 3rem;
+}
+
+.hero img.hero__logo {
+  height: 140px !important;
+  width: auto !important;
+  max-width: none !important;
+  display: block;
+  margin: 0 auto 1.5rem;
+}
+
+.hero__title,
+.hero h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: 0 0 1rem;
+  color: var(--md-default-fg-color);
+}
+
+.hero__subtitle {
+  font-size: 1.1rem;
+  max-width: 600px;
+  margin: 0 auto 2rem;
+  color: var(--md-default-fg-color--light);
+  line-height: 1.6;
+}
+
+.hero__install {
+  display: inline-block;
+  background: var(--md-code-bg-color);
+  border: 1px solid var(--md-primary-fg-color);
+  border-radius: 6px;
+  padding: 0.65rem 1.25rem;
+  font-family: var(--md-code-font-family);
+  font-size: 0.9rem;
+  color: var(--md-code-fg-color);
+  margin-bottom: 2rem;
+  text-align: left;
+  white-space: nowrap;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.hero__install .prompt {
+  color: var(--md-accent-fg-color);
+  user-select: none;
+}
+
+.hero__actions {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.hero__actions .md-button {
+  min-width: 9rem;
+}
+
+/* ============================================================
+   Feature grid
+   ============================================================ */
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.2rem;
+  margin: 3rem 0;
+}
+
+.feature-card {
+  border: 1px solid var(--md-primary-fg-color);
+  border-radius: 8px;
+  background: var(--md-code-bg-color);
+  padding: 1.4rem;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.feature-card:hover {
+  border-color: var(--md-accent-fg-color);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.feature-card .feature-card__icon {
+  font-size: 1.75rem;
+  display: block;
+  margin-bottom: 0.65rem;
+  line-height: 1;
+}
+
+.feature-card .feature-card__icon svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  fill: var(--md-accent-fg-color);
+}
+
+.feature-card h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0 0 0.4rem;
+  color: var(--md-default-fg-color);
+}
+
+.feature-card p {
+  font-size: 0.85rem;
+  color: var(--md-default-fg-color--light);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   Terminal demo
+   ============================================================ */
+
+.terminal-demo {
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  margin: 3rem 0;
+  font-family: var(--md-code-font-family);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.terminal-demo__bar {
+  background: #3a3a3a;
+  padding: 0.6rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  position: relative;
+}
+
+.terminal-demo__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.terminal-demo__dot--red    { background: #ff5f57; }
+.terminal-demo__dot--yellow { background: #ffbd2e; }
+.terminal-demo__dot--green  { background: #28c840; }
+
+.terminal-demo__title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  color: #999;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.terminal-demo__body {
+  background: #1e1e1e;
+  padding: 1.25rem 1.5rem;
+  color: #d4d4d4;
+  overflow-x: auto;
+}
+
+.terminal-demo__body .prompt {
+  color: #569cd6;
+  user-select: none;
+}
+
+.terminal-demo__body .cmd {
+  color: #a8cc8c;
+}
+
+.terminal-demo__body .out {
+  color: #888;
+}
+
+.terminal-demo__body .ok {
+  color: #28c840;
+}
+
+.terminal-demo__body .spacer {
+  display: block;
+  height: 0.5rem;
+}
+
+/* ============================================================
+   CTA section
+   ============================================================ */
+
+.cta-section {
+  text-align: center;
+  border-top: 1px solid var(--md-primary-fg-color);
+  padding: 3rem 1rem;
+  margin-top: 3rem;
+}
+
+.cta-section h2 {
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+  color: var(--md-default-fg-color);
+}
+
+.cta-section p {
+  font-size: 1rem;
+  color: var(--md-default-fg-color--light);
+  max-width: 480px;
+  margin: 0 auto 1.75rem;
+  line-height: 1.6;
+}
+
+.cta-section .md-button {
+  min-width: 10rem;
+}

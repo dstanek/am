@@ -352,6 +352,21 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 ## Bugs / Improvements Backlog
 
+### Future: Versioned documentation
+
+The docs site (`docs/`) is built with MkDocs Material. Doc history is already preserved via
+release tags in the repo, but there is no hosted versioned URL (e.g. `/0.1/`, `/0.2/`).
+
+**When to do this:** when breaking changes start appearing between minor versions (renamed
+config keys, removed flags, changed behaviour), or when users begin pinning to older releases.
+
+**Approach:** add [`mike`](https://github.com/jimporter/mike) alongside the existing MkDocs
+setup. `mike` deploys each version to a separate path on GitHub Pages and adds a version
+switcher to the Material theme UI. The CI release workflow would call
+`mike deploy --push --update-aliases <version> latest` after each release.
+
+---
+
 ### Bug: Context-aware user messages
 > Spec: [`specs/context-aware-messages.md`](specs/context-aware-messages.md)
 
