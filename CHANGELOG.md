@@ -1,9 +1,22 @@
+## [0.1.2] - 2026-03-28
+
+### 🐛 Bug Fixes
+
+- *(deps)* Vendor OpenSSL to fix cross-compilation on macOS
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Update release command for jj push workflow
 ## [0.1.1] - 2026-03-28
 
 ### 🐛 Bug Fixes
 
 - *(release)* Fix macos-13 runner deprecation and deb copyright warning
 - *(main)* Fix Windows build by gating unix-only exec() behind cfg(unix)
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V0.1.1
 ## [0.1.0] - 2026-03-28
 
 ### 🚀 Features
