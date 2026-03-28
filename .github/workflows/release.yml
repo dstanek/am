@@ -249,5 +249,5 @@ jobs:
           git push origin "release/v${VERSION}"
           gh pr create \
             --title "Update am to v${VERSION}" \
-            --body "Automated formula update for [release v${VERSION}](https://github.com/dstanek/am/releases/tag/v${VERSION})." \
+            --body "Automated formula update for [release v${VERSION}](https://github.com/dstanek/agent-manager/releases/tag/v${VERSION})." \
             --repo dstanek/homebrew-am

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-REPO="dstanek/am"
+REPO="dstanek/agent-manager"
 BINARY="am"
 INSTALL_DIR="${AM_INSTALL_DIR:-$HOME/.local/bin}"
 

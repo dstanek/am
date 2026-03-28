@@ -5,7 +5,7 @@ edition = "2021"
 description = "Creates isolated environments for coding agents"
 authors = ["David Stanek"]
 license = "MIT"
-repository = "https://github.com/dstanek/am"
+repository = "https://github.com/dstanek/agent-manager"
 
 [[bin]]
 name = "am"

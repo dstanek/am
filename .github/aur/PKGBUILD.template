@@ -4,14 +4,14 @@ pkgver={{VERSION}}
 pkgrel=1
 pkgdesc="Creates isolated environments for coding agents"
 arch=('x86_64' 'aarch64')
-url="https://github.com/dstanek/am"
+url="https://github.com/dstanek/agent-manager"
 license=('MIT')
 depends=()
 provides=('am')
 conflicts=('am')
 
-source_x86_64=("$pkgname-$pkgver-x86_64.tar.gz::https://github.com/dstanek/am/releases/download/v$pkgver/am-x86_64-unknown-linux-gnu.tar.gz")
-source_aarch64=("$pkgname-$pkgver-aarch64.tar.gz::https://github.com/dstanek/am/releases/download/v$pkgver/am-aarch64-unknown-linux-gnu.tar.gz")
+source_x86_64=("$pkgname-$pkgver-x86_64.tar.gz::https://github.com/dstanek/agent-manager/releases/download/v$pkgver/am-x86_64-unknown-linux-gnu.tar.gz")
+source_aarch64=("$pkgname-$pkgver-aarch64.tar.gz::https://github.com/dstanek/agent-manager/releases/download/v$pkgver/am-aarch64-unknown-linux-gnu.tar.gz")
 
 # Update these checksums on each release. Generate with:
 #   sha256sum am-x86_64-unknown-linux-gnu.tar.gz
@@ -22,7 +22,7 @@ sha256sums_aarch64=('{{SHA_LINUX_ARM}}')
 package() {
     install -Dm755 am "$pkgdir/usr/bin/am"
     install -Dm644 /dev/stdin "$pkgdir/usr/share/licenses/$pkgname/LICENSE" <<EOF
-$(curl -sL "https://raw.githubusercontent.com/dstanek/am/v$pkgver/LICENSE")
+$(curl -sL "https://raw.githubusercontent.com/dstanek/agent-manager/v$pkgver/LICENSE")
 EOF
 }
 
