@@ -36,9 +36,10 @@ pub struct AgentAuthMount {
 #[derive(Debug, Clone)]
 pub struct ContainerMounts {
     pub worktree_host: PathBuf,
-    pub vcs_host: PathBuf,       // .git dir (git) or .jj dir (jj)
-    pub gitconfig_host: PathBuf, // ~/.gitconfig
-    pub ssh_host: PathBuf,       // ~/.ssh
+    pub vcs_host: PathBuf,                   // .git dir (git) or .jj dir (jj)
+    pub colocated_git_host: Option<PathBuf>, // .git for colocated jj+git repos
+    pub gitconfig_host: PathBuf,             // ~/.gitconfig
+    pub ssh_host: PathBuf,                   // ~/.ssh
     pub agent_auth: Vec<AgentAuthMount>,
 }
 
@@ -116,11 +117,19 @@ pub fn resolve_mounts(
         Vcs::Git => repo_root.join(".git"),
         Vcs::Jj => repo_root.join(".jj"),
     };
+    // For colocated jj+git repos, .git holds the git object store used as the
+    // jj backend and must be mounted alongside .jj.
+    let colocated_git_host = if matches!(vcs, Vcs::Jj) {
+        let git = repo_root.join(".git");
+        if git.is_dir() { Some(git) } else { None }
+    } else {
+        None
+    };
     let gitconfig_host = home.join(".gitconfig");
     let ssh_host = home.join(".ssh");
     let agent_auth = agent.map(resolve_agent_auth_mount).unwrap_or_default();
 
-    Ok(ContainerMounts { worktree_host, vcs_host, gitconfig_host, ssh_host, agent_auth })
+    Ok(ContainerMounts { worktree_host, vcs_host, colocated_git_host, gitconfig_host, ssh_host, agent_auth })
 }
 
 pub fn resolve_agent_auth_mount(agent: &str) -> Vec<AgentAuthMount> {
@@ -231,6 +240,13 @@ pub fn build_run_command(
     let vcs_str = mounts.vcs_host.to_string_lossy();
     cmd.push("-v".to_string());
     cmd.push(mount_str(&mounts.vcs_host, &vcs_str, MountMode::ReadWrite, selinux));
+
+    // Colocated jj+git: mount the git object store alongside .jj
+    if let Some(ref git) = mounts.colocated_git_host {
+        let git_str = git.to_string_lossy();
+        cmd.push("-v".to_string());
+        cmd.push(mount_str(git, &git_str, MountMode::ReadWrite, selinux));
+    }
 
     // ~/.gitconfig
     cmd.push("-v".to_string());
@@ -363,6 +379,7 @@ mod tests {
         ContainerMounts {
             worktree_host: tmp.join("worktrees/feat"),
             vcs_host: tmp.join(".git"),
+            colocated_git_host: None,
             gitconfig_host: tmp.join(".gitconfig"),
             ssh_host: tmp.join(".ssh"),
             agent_auth: vec![],
@@ -468,6 +485,59 @@ mod tests {
         assert!(mounts.agent_auth.is_empty());
 
         std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn resolve_mounts_jj_colocated_sets_git_host() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+
+        let repo_root = tmp.path().join("repo");
+        std::fs::create_dir_all(repo_root.join(".git")).unwrap();
+        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Jj, None).unwrap();
+
+        assert_eq!(mounts.colocated_git_host, Some(repo_root.join(".git")));
+
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn resolve_mounts_jj_non_colocated_no_git_host() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+
+        let repo_root = tmp.path().join("repo");
+        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Jj, None).unwrap();
+
+        assert_eq!(mounts.colocated_git_host, None);
+
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn build_run_command_mounts_colocated_git_when_set() {
+        let tmp = TempDir::new().unwrap();
+        let main_git = tmp.path().join("main/.git");
+        std::fs::create_dir_all(&main_git).unwrap();
+        let mut mounts = make_mounts(tmp.path());
+        mounts.colocated_git_host = Some(main_git.clone());
+
+        let cmd = build_run_command(
+            &docker_runtime(),
+            "ubuntu:25.10",
+            &mounts,
+            &[],
+            &[],
+            &NetworkMode::Full,
+            "am-feat",
+        );
+        let joined = cmd.join(" ");
+        assert!(
+            joined.contains(main_git.to_string_lossy().as_ref()),
+            "expected colocated git mount, got: {joined}"
+        );
     }
 
     #[test]
