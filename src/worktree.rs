@@ -32,9 +32,16 @@ pub fn create_git_worktree(slug: &str, repo_root: &Path) -> Result<PathBuf> {
     }
 
     // Resolve HEAD to a commit
-    let head = repo
-        .head()
-        .map_err(|e| AmError::WorktreeError(format!("cannot resolve HEAD: {e}")))?;
+    let head = repo.head().map_err(|e| {
+        if e.code() == git2::ErrorCode::UnbornBranch {
+            AmError::WorktreeError(
+                "repository has no commits yet — make an initial commit before running 'am start'"
+                    .to_string(),
+            )
+        } else {
+            AmError::WorktreeError(format!("cannot resolve HEAD: {e}"))
+        }
+    })?;
     let commit = head
         .peel_to_commit()
         .map_err(|e| AmError::WorktreeError(format!("HEAD is not a commit: {e}")))?;
@@ -302,6 +309,19 @@ mod tests {
 
         std::env::remove_var("AM_JJ_BIN");
         std::env::remove_var("AM_JJ_LOG");
+    }
+
+    #[test]
+    fn create_git_worktree_errors_on_unborn_branch() {
+        let tmp = TempDir::new().unwrap();
+        // Init repo but make NO initial commit — HEAD is unborn
+        Repository::init(tmp.path()).unwrap();
+
+        let err = create_git_worktree("feat", tmp.path()).unwrap_err();
+        assert!(
+            err.to_string().contains("no commits yet"),
+            "expected helpful unborn-branch message, got: {err}"
+        );
     }
 
     #[test]
