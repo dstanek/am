@@ -110,6 +110,38 @@ Container isolation can be disabled per-session with `--no-container`, or turned
 
 ---
 
+## Modes
+
+`am` supports two modes of operation that reflect how much the agent drives the work versus how much you do.
+
+### Interactive mode (default)
+
+In **interactive mode** you are in the loop at all times. You start a session, the agent opens in its pane, and you direct the work through the agent's chat interface. The agent acts, you review, you steer.
+
+This is the current default. Every `am start` invocation is interactive unless told otherwise.
+
+```sh
+am start feat --agent claude
+```
+
+### Autonomous mode *(coming soon — `--auto`)*
+
+In **autonomous mode** you hand the agent a goal and step back. The agent works independently, making decisions without waiting for your input between steps. Useful for long-running or well-scoped tasks where you want to come back to a finished result.
+
+```sh
+am start feat --agent claude --auto   # future
+```
+
+### Team orchestration *(coming soon — `--team`)*
+
+The `--team` flag will instruct `am` to start and coordinate multiple agents working toward a shared goal — each in its own isolated session, each on its own branch. `am` handles launching the sessions; the agents coordinate the work.
+
+```sh
+am start feat --team --agent claude   # future
+```
+
+---
+
 ## Agent integrations
 
 `am` has built-in **agent integrations** for the most popular coding agents. Activating an integration (via `container.agent` in config or `--agent` on the command line) tells `am` to automatically mount that agent's credentials from your host into the container at runtime.

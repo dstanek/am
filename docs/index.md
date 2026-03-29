@@ -8,10 +8,10 @@ hide:
 
 ![am logo](assets/am-500x451.png){ .hero__logo }
 
-# One command to launch an agent. One more to launch a team.
+# Run multiple agents without the chaos.
 
 <p class="hero__subtitle">
-  From your first agent session to a fleet running in parallel — <code>am</code> keeps every agent isolated, organized, and out of each other's way.
+  <code>am</code> isolates each agent in its own branch, terminal, and container. Start solo—scale to teams—all with one command.
 </p>
 
 <div class="hero__install">
@@ -25,41 +25,75 @@ hide:
 
 </div>
 
+<div class="use-cases" markdown>
+
+## Interactive: Parallel Workstreams
+
+Start Claude Code on a feature. Start Copilot on tests. Start another on refactoring. Each agent runs in complete isolation — its own branch, its own container, entirely unaware of the others. You direct each one individually through its chat interface.
+
+```
+am start feature-api --agent claude
+am start feature-tests --agent copilot
+am start feature-docs --agent claude
+```
+
+Merge the best work when you're done. No conflicts. No coordination overhead.
+
+## Autonomous *(coming soon — `--auto`)*
+
+Hand the agent a goal and step back. In autonomous mode the agent works independently without waiting for your input. Come back to a finished result.
+
+```
+am start big-refactor --agent claude --auto
+```
+
+## Team Orchestration *(coming soon — `--team`)*
+
+One goal, multiple agents. `--team` launches and coordinates a team of agents working in parallel — each completely isolated, each on its own branch.
+
+```
+am start big-feature --agent claude --team
+```
+
+Merge the best work when you're done. The command is the same today as it will be tomorrow: `am start <slug> --agent <name>`. Isolation is built-in by default.
+
+</div>
+
 <div class="feature-grid" markdown>
 
 <div class="feature-card" markdown>
-<span class="feature-card__icon">:material-source-branch:</span>
+<span class="feature-card__icon">:material-lightning-bolt:</span>
 
-### Isolated Branches
+### One Command, Full Setup
 
-Every session gets its own `am/<slug>` branch via git worktrees or jj workspaces. Changes from different agents never collide.
+`am start` creates an isolated branch, tmux window, container, and launches your agent. Everything ready to go—no manual setup.
+
+</div>
+
+<div class="feature-card" markdown>
+<span class="feature-card__icon">:material-git:</span>
+
+### No Conflicts, Ever
+
+Each session gets its own `am/<slug>` branch via git worktrees or jj workspaces. Multiple agents can work in parallel—their code never interferes.
 
 </div>
 
 <div class="feature-card" markdown>
 <span class="feature-card__icon">:material-console:</span>
 
-### Dedicated Terminals
+### Side-by-Side Terminals
 
-A split-pane tmux window per session. Agent on one side, your shell on the other. No tab-switching.
-
-</div>
-
-<div class="feature-card" markdown>
-<span class="feature-card__icon">:material-cube-outline:</span>
-
-### Container Isolation
-
-Rootless Podman or Docker wraps each agent in a hard boundary. Credentials mount in at runtime — nothing is baked into the image.
+Agent on one side of a split-pane tmux window, your shell on the other. Watch multiple agents work in parallel. No context-switching.
 
 </div>
 
 <div class="feature-card" markdown>
-<span class="feature-card__icon">:material-robot:</span>
+<span class="feature-card__icon">:material-delete-forever:</span>
 
-### Agent-Agnostic
+### One Command Cleanup
 
-Built-in integrations for Claude Code, GitHub Copilot, Gemini, Codex, and Aider handle credential mounting automatically. Any executable works as a custom agent.
+`am clean <slug>` stops the container, kills the window, removes the branch. Completely gone in seconds. No orphaned resources.
 
 </div>
 
@@ -75,37 +109,33 @@ Built-in integrations for Claude Code, GitHub Copilot, Gemini, Codex, and Aider 
   </div>
   <div class="terminal-demo__body">
     <span class="prompt">$ </span><span class="cmd">am init</span><br>
-    <span class="ok">✓</span> <span class="out">Created .am/ in ~/myproject</span>
+    <span class="ok">✓</span> <span class="out">Initialized in ~/myproject/.am</span>
     <span class="spacer"></span>
-    <span class="prompt">$ </span><span class="cmd">am start feat --agent claude</span><br>
-    <span class="ok">✓</span> <span class="out">Branch am/feat created</span><br>
-    <span class="ok">✓</span> <span class="out">tmux window am-feat ready</span><br>
-    <span class="ok">✓</span> <span class="out">Container am-feat starting...</span><br>
+    <span class="prompt">$ </span><span class="cmd">am start feature --agent claude</span><br>
+    <span class="ok">✓</span> <span class="out">Branch am/feature created</span><br>
+    <span class="ok">✓</span> <span class="out">Session feature ready (tmux window am-feature)</span><br>
     <span class="ok">✓</span> <span class="out">Claude Code launched</span>
     <span class="spacer"></span>
-    <span class="prompt">$ </span><span class="cmd">am start auth --agent claude</span><br>
-    <span class="ok">✓</span> <span class="out">Branch am/auth created</span><br>
-    <span class="ok">✓</span> <span class="out">tmux window am-auth ready</span><br>
-    <span class="ok">✓</span> <span class="out">Container am-auth starting...</span><br>
-    <span class="ok">✓</span> <span class="out">Claude Code launched</span>
+    <span class="prompt">$ </span><span class="cmd">am start tests --agent copilot</span><br>
+    <span class="ok">✓</span> <span class="out">Branch am/tests created</span><br>
+    <span class="ok">✓</span> <span class="out">Session tests ready (tmux window am-tests)</span><br>
+    <span class="ok">✓</span> <span class="out">GitHub Copilot launched</span>
     <span class="spacer"></span>
     <span class="prompt">$ </span><span class="cmd">am list</span><br>
-    <span class="out">SLUG   AGENT    WINDOW     CREATED</span><br>
-    <span class="out">feat   claude   am-feat    2 min ago</span><br>
-    <span class="out">auth   claude   am-auth    just now</span>
+    <span class="out">SLUG      AGENT     WINDOW        CREATED</span><br>
+    <span class="out">feature   claude    am-feature    3 min ago</span><br>
+    <span class="out">tests     copilot   am-tests      1 min ago</span>
     <span class="spacer"></span>
-    <span class="prompt">$ </span><span class="cmd">am clean feat --force</span><br>
-    <span class="ok">✓</span> <span class="out">Container am-feat stopped</span><br>
-    <span class="ok">✓</span> <span class="out">Worktree .am/worktrees/feat removed</span><br>
-    <span class="ok">✓</span> <span class="out">Session feat cleaned up</span>
+    <span class="prompt">$ </span><span class="cmd">am clean feature --force</span><br>
+    <span class="ok">✓</span> <span class="out">Container stopped · Worktree removed · Session cleaned</span>
   </div>
 </div>
 
 <div class="cta-section" markdown>
 
-## Ready to get started?
+## Ready to run your first agent session?
 
-Install `am` in seconds and run your first agent session in under five minutes.
+Install `am` and get started in under five minutes.
 
 <a href="getting-started/quick-start/" class="md-button md-button--primary">Get Started →</a>
 
