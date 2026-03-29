@@ -168,22 +168,14 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
     let window_name = format!("am-{slug}");
 
     if tmux::is_in_tmux() {
+        tmux::create_window(&window_name, &worktree_path)
+            .map_err(|e| anyhow::anyhow!(
+                "{e}\nHint: a window named '{window_name}' may already exist — run 'am destroy {slug}' first"
+            ))?;
         if let Some(ref cmd) = container_cmd {
-            // Run the container command directly as the pane's shell command so
-            // it is never echoed as keystrokes. Clear the pane on exit.
-            tmux::create_window_with_shell_cmd(
-                &window_name,
-                &worktree_path,
-                &format!("{}; clear", cmd.join(" ")),
-            )
-                .map_err(|e| anyhow::anyhow!(
-                    "{e}\nHint: a window named '{window_name}' may already exist — run 'am destroy {slug}' first"
-                ))?;
+            // Send the container command as keystrokes so it appears in the pane.
+            tmux::send_keys(&tmux::get_pane_id(&window_name, 0), &cmd.join(" "))?;
         } else {
-            tmux::create_window(&window_name, &worktree_path)
-                .map_err(|e| anyhow::anyhow!(
-                    "{e}\nHint: a window named '{window_name}' may already exist — run 'am destroy {slug}' first"
-                ))?;
             // No container — launch agent directly in the pane if specified
             if let Some(ref agent) = effective_agent {
                 tmux::send_keys(&tmux::get_pane_id(&window_name, 0), agent)?;
