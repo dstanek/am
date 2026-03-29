@@ -3,7 +3,7 @@ ifeq ($(DOCKER),)
 $(error "Neither podman nor docker found on PATH")
 endif
 
-.PHONY: all build-claude build-copilot build-docs-image docs docs-serve
+.PHONY: all build-claude build-copilot build-am-dev build-docs-image docs docs-serve
 
 all: build-claude build-copilot
 
@@ -12,6 +12,9 @@ build-claude:
 
 build-copilot:
 	$(DOCKER) build -f dockerfiles/Dockerfile.copilot -t am-copilot:latest .
+
+build-am-dev:
+	$(DOCKER) build -f dockerfiles/Dockerfile.am-dev -t am-dev:latest .
 
 build-docs-image:
 	$(DOCKER) build -f dockerfiles/Dockerfile.docs -t am-docs:latest .

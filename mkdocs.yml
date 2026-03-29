@@ -48,6 +48,7 @@ nav:
   - Guides:
     - Claude Code: guides/claude-code.md
     - GitHub Copilot: guides/github-copilot.md
+    - Custom Images: guides/custom-images.md
   - Reference:
     - Commands: reference/commands.md
     - Configuration: reference/configuration.md

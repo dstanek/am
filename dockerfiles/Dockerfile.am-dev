@@ -1,0 +1,33 @@
+FROM am-claude:latest
+
+# Build tools needed for git2's vendored libgit2 + openssl
+RUN <<EOF
+set -e
+apt-get update && apt-get install -y \
+    cmake \
+    perl \
+    pkg-config \
+    libssl-dev
+rm -rf /var/lib/apt/lists/*
+EOF
+
+# Install Rust via rustup
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --default-toolchain stable --profile minimal
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Configure git identity — required by `am` tests that run `git commit`
+RUN git config --global user.email "dev@example.com" \
+ && git config --global user.name "Dev"
+
+# Pre-fetch dependencies so incremental rebuilds inside the container are fast.
+# Copy only the manifest files first; source is mounted at runtime.
+WORKDIR /workspace
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir -p src tests \
+ && echo 'fn main() {}' > src/main.rs \
+ && echo 'fn main() {}' > tests/cucumber.rs \
+ && cargo fetch \
+ && rm -rf src tests
+
+# Source tree is mounted at /workspace by `am`
