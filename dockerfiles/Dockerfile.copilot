@@ -50,5 +50,14 @@ curl -fsSL "https://github.com/jj-vcs/jj/releases/download/${JJ_VERSION}/jj-${JJ
 rm -rf /var/lib/apt/lists/*
 EOF
 
+# Create a non-root user so agents can run without elevated privileges
+# Ubuntu 25.10+ ships with an 'ubuntu' user at UID 1000; remove it and create 'am' instead
+RUN userdel -r ubuntu 2>/dev/null || true \
+ && useradd -m -u 1000 -s /bin/bash am \
+ && mkdir -p /workspace && chown am:am /workspace
+
+USER am
+ENV HOME=/home/am
+
 # ~/.config/gh and ~/.config/github-copilot will be mounted read-only by `am` at runtime
 WORKDIR /workspace

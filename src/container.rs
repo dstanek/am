@@ -164,12 +164,12 @@ pub fn resolve_agent_auth_mount(agent: &str) -> Vec<AgentAuthMount> {
             vec![
                 AgentAuthMount {
                     host_path: config_host,
-                    container_path: PathBuf::from("/root/.claude"),
+                    container_path: PathBuf::from("/home/am/.claude"),
                     mode: MountMode::ReadWrite,
                 },
                 AgentAuthMount {
                     host_path: home.join(".claude.json"),
-                    container_path: PathBuf::from("/root/.claude.json"),
+                    container_path: PathBuf::from("/home/am/.claude.json"),
                     mode: MountMode::ReadWrite,
                 },
             ]
@@ -178,18 +178,18 @@ pub fn resolve_agent_auth_mount(agent: &str) -> Vec<AgentAuthMount> {
             AgentAuthMount {
                 // GitHub CLI auth token (required for Copilot authentication)
                 host_path: home.join(".config").join("gh"),
-                container_path: PathBuf::from("/root/.config/gh"),
+                container_path: PathBuf::from("/home/am/.config/gh"),
                 mode: MountMode::ReadOnly,
             },
             AgentAuthMount {
                 host_path: home.join(".config").join("github-copilot"),
-                container_path: PathBuf::from("/root/.config/github-copilot"),
+                container_path: PathBuf::from("/home/am/.config/github-copilot"),
                 mode: MountMode::ReadOnly,
             },
         ],
         "gemini" => vec![AgentAuthMount {
             host_path: home.join(".gemini"),
-            container_path: PathBuf::from("/root/.gemini"),
+            container_path: PathBuf::from("/home/am/.gemini"),
             mode: MountMode::ReadOnly,
         }],
         "codex" | "aider" => vec![], // env-var only, no filesystem mount
@@ -243,6 +243,22 @@ pub fn validate_agent(agent: &str) -> Result<()> {
 
 // ── Command building ──────────────────────────────────────────────────────────
 
+fn get_host_uid_gid() -> Option<(u32, u32)> {
+    let uid = std::process::Command::new("id")
+        .arg("-u")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .and_then(|s| s.trim().parse::<u32>().ok())?;
+    let gid = std::process::Command::new("id")
+        .arg("-g")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .and_then(|s| s.trim().parse::<u32>().ok())?;
+    Some((uid, gid))
+}
+
 pub fn build_run_command(
     runtime: &ContainerRuntime,
     image: &str,
@@ -261,6 +277,19 @@ pub fn build_run_command(
         "--name".to_string(),
         container_name.to_string(),
     ];
+
+    // Run as the host user so bind-mounted files are readable/writable
+    if let Some((uid, gid)) = get_host_uid_gid() {
+        match runtime.kind {
+            RuntimeKind::Podman => {
+                cmd.push(format!("--userns=keep-id:uid={uid},gid={gid}"));
+            }
+            RuntimeKind::Docker => {
+                cmd.push("--user".to_string());
+                cmd.push(format!("{uid}:{gid}"));
+            }
+        }
+    }
 
     // Worktree mount — same path inside the container as on the host
     let worktree_str = mounts.worktree_host.to_string_lossy();
@@ -293,7 +322,7 @@ pub fn build_run_command(
     cmd.push("-v".to_string());
     cmd.push(mount_str(
         &mounts.gitconfig_host,
-        "/root/.gitconfig",
+        "/home/am/.gitconfig",
         MountMode::ReadOnly,
         selinux,
     ));
@@ -302,7 +331,7 @@ pub fn build_run_command(
     cmd.push("-v".to_string());
     cmd.push(mount_str(
         &mounts.ssh_host,
-        "/root/.ssh",
+        "/home/am/.ssh",
         MountMode::ReadOnly,
         selinux,
     ));
@@ -312,7 +341,7 @@ pub fn build_run_command(
         cmd.push("-v".to_string());
         cmd.push(mount_str(
             &auth.host_path,
-            auth.container_path.to_str().unwrap_or("/root/.agent"),
+            auth.container_path.to_str().unwrap_or("/home/am/.agent"),
             auth.mode.clone(),
             selinux,
         ));
@@ -616,7 +645,7 @@ mod tests {
         assert_eq!(mounts.agent_auth[0].host_path, tmp.path().join(".claude"));
         assert_eq!(
             mounts.agent_auth[0].container_path,
-            PathBuf::from("/root/.claude")
+            PathBuf::from("/home/am/.claude")
         );
 
         std::env::remove_var("HOME");
@@ -694,8 +723,8 @@ mod tests {
         let joined = cmd.join(" ");
         assert!(joined.contains(&worktree), "missing worktree mount");
         assert!(joined.contains(&git), "missing vcs mount");
-        assert!(joined.contains("/root/.gitconfig"));
-        assert!(joined.contains("/root/.ssh"));
+        assert!(joined.contains("/home/am/.gitconfig"));
+        assert!(joined.contains("/home/am/.ssh"));
     }
 
     #[test]
@@ -865,12 +894,12 @@ mod tests {
         let mounts = resolve_agent_auth_mount("claude");
         assert_eq!(mounts.len(), 2);
         assert_eq!(mounts[0].host_path, tmp.path().join(".claude"));
-        assert_eq!(mounts[0].container_path, PathBuf::from("/root/.claude"));
+        assert_eq!(mounts[0].container_path, PathBuf::from("/home/am/.claude"));
         assert_eq!(mounts[0].mode, MountMode::ReadWrite);
         assert_eq!(mounts[1].host_path, tmp.path().join(".claude.json"));
         assert_eq!(
             mounts[1].container_path,
-            PathBuf::from("/root/.claude.json")
+            PathBuf::from("/home/am/.claude.json")
         );
         assert_eq!(mounts[1].mode, MountMode::ReadWrite);
 
@@ -888,12 +917,12 @@ mod tests {
         let mounts = resolve_agent_auth_mount("claude");
         assert_eq!(mounts.len(), 2);
         assert_eq!(mounts[0].host_path, custom_config);
-        assert_eq!(mounts[0].container_path, PathBuf::from("/root/.claude"));
+        assert_eq!(mounts[0].container_path, PathBuf::from("/home/am/.claude"));
         assert_eq!(mounts[0].mode, MountMode::ReadWrite);
         assert_eq!(mounts[1].host_path, tmp.path().join(".claude.json"));
         assert_eq!(
             mounts[1].container_path,
-            PathBuf::from("/root/.claude.json")
+            PathBuf::from("/home/am/.claude.json")
         );
 
         std::env::remove_var("CLAUDE_CONFIG_DIR");
@@ -909,7 +938,7 @@ mod tests {
         let mut mounts = make_mounts(tmp.path());
         mounts.agent_auth = vec![AgentAuthMount {
             host_path: tmp.path().join(".claude"),
-            container_path: PathBuf::from("/root/.claude"),
+            container_path: PathBuf::from("/home/am/.claude"),
             mode: MountMode::ReadWrite,
         }];
 
@@ -924,7 +953,7 @@ mod tests {
         );
         let joined = cmd.join(" ");
         assert!(
-            joined.contains("/root/.claude"),
+            joined.contains("/home/am/.claude"),
             "expected claude mount, got: {joined}"
         );
 
@@ -1067,8 +1096,8 @@ mod tests {
 
         let mounts = resolve_agent_auth_mount("copilot");
         let container_paths: Vec<_> = mounts.iter().map(|m| m.container_path.clone()).collect();
-        assert!(container_paths.contains(&PathBuf::from("/root/.config/gh")));
-        assert!(container_paths.contains(&PathBuf::from("/root/.config/github-copilot")));
+        assert!(container_paths.contains(&PathBuf::from("/home/am/.config/gh")));
+        assert!(container_paths.contains(&PathBuf::from("/home/am/.config/github-copilot")));
 
         std::env::remove_var("HOME");
     }
