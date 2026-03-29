@@ -352,6 +352,28 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 ## Bugs / Improvements Backlog
 
+### Future: Autonomous mode (`--auto` flag)
+
+Add an `--auto` flag to `am start` that puts the session into autonomous mode. In autonomous
+mode the agent works without waiting for user input between steps.
+
+**Behaviour:** when `--auto` is passed, `am start` sets a flag in the session record and
+(eventually) configures the agent with any autonomy-enabling options the agent supports.
+Commit trailer: `Auto-Piloted-By`.
+
+---
+
+### Future: Team orchestration (`--team` flag)
+
+Add a `--team` flag to `am start` that launches and coordinates multiple agents working
+toward a shared goal. Each agent runs in its own isolated session and branch. `am` handles
+orchestration; agents work independently and are unaware of each other.
+
+**Open questions:** how goals are specified, how results are surfaced, how many agents are
+spawned and with what slugs.
+
+---
+
 ### Future: Versioned documentation
 
 The docs site (`docs/`) is built with MkDocs Material. Doc history is already preserved via
