@@ -43,6 +43,8 @@ make build-copilot           # Build Copilot Docker image
 - Mock tmux via `AM_TMUX_BIN` env var; mock container runtimes via `AM_PODMAN_BIN`/`AM_DOCKER_BIN`
 - Tests that mutate env vars use a mutex to serialize execution (see existing tests for pattern)
 
+**After every code change:** run `cargo test` to verify no compiler errors and all tests pass before considering the task complete. Fix any failures before proceeding.
+
 ## Version Control
 
 This repo uses **jj (Jujutsu)**. Use `jj` commands instead of `git` for all VCS operations.
