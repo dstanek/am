@@ -4,6 +4,21 @@ Get from zero to your first agent session in five minutes.
 
 ---
 
+## Before You Start
+
+Make sure you have these prerequisites:
+
+- **tmux** installed AND running (start with `tmux` if you haven't already)
+- **Podman** or **Docker** installed and available on your `PATH`
+- A **git repository** initialized (run `git init` if you need one)
+- **An agent container image** (or a plan to build one — see below)
+
+Don't have a container image yet? No problem. Follow the [Claude Code guide](../guides/claude-code.md) or [GitHub Copilot guide](../guides/github-copilot.md) to build one from a ready-to-use `Dockerfile`. Takes about 5 minutes.
+
+See the [Installation guide](installation.md) for detailed setup instructions for each prerequisite.
+
+---
+
 ## Sessions and slugs
 
 Everything in `am` revolves around a **session** — a named, isolated workspace for a single agent working on a single task. A session bundles together:
@@ -24,15 +39,6 @@ slug: feat
 Slugs can contain lowercase letters, digits, hyphens, and underscores, and must be between 1 and 40 characters. Pick something descriptive: `feat`, `fix-login`, `refactor-api`.
 
 ---
-
-!!! note "Prerequisites"
-    Before you begin, make sure you have:
-
-    - **tmux** running in your terminal (start with `tmux` if you haven't already)
-    - **Podman** or **Docker** installed and available on your `PATH`
-    - A **git repository** to work in (run `git init` if you need one)
-
-    See the [Installation guide](installation.md) for setup instructions.
 
 ---
 
