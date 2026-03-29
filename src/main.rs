@@ -24,8 +24,8 @@ fn main() {
 fn run(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
         Commands::Init => cmd_init(),
-        Commands::Start { slug, agent, no_container } => {
-            cmd_start(&slug, agent.as_deref(), no_container)
+        Commands::Start { slug, agent, no_container, auto } => {
+            cmd_start(&slug, agent.as_deref(), no_container, auto)
         }
         Commands::List => cmd_list(),
         Commands::Attach { slug } => cmd_attach(&slug),
@@ -79,7 +79,7 @@ fn cmd_init() -> anyhow::Result<()> {
 
 // ── am start ──────────────────────────────────────────────────────────────────
 
-fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool) -> anyhow::Result<()> {
+fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: bool) -> anyhow::Result<()> {
     let repo_root = find_repo_root()?;
     let sessions = session::load_sessions(&repo_root)?;
 
@@ -105,12 +105,20 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool) -> anyhow
     // 1. VCS
     let vcs = worktree::detect_vcs(&repo_root)?;
 
-    // 2. Agent credentials
+    // 2. Auto mode constraints
+    if auto && no_container {
+        return Err(error::AmError::AutoRequiresContainer.into());
+    }
+    if auto && effective_agent.is_none() {
+        return Err(error::AmError::AutoRequiresAgent.into());
+    }
+
+    // 3. Agent credentials
     if let Some(ref agent) = effective_agent {
         container::validate_agent(agent)?;
     }
 
-    // 3. Container config
+    // 4. Container config
     let use_container = cfg.container.enabled && !no_container;
     let (_runtime, container_cmd, session_container) = if use_container {
         let image = cfg.container.image.as_deref()
@@ -138,6 +146,9 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool) -> anyhow
         // Append the agent as the container CMD so it launches automatically
         if let Some(ref agent) = effective_agent {
             cmd.push(agent.clone());
+            if auto {
+                cmd.extend(container::agent_auto_flags(agent));
+            }
         }
 
         let sc = session::SessionContainer {
@@ -213,6 +224,7 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool) -> anyhow
         shell_pane: format!("am-{slug}.1"),
         created_at: chrono::Utc::now(),
         container: session_container,
+        auto,
     };
     session::add_session(&repo_root, new_session)?;
 
@@ -240,18 +252,20 @@ fn cmd_list() -> anyhow::Result<()> {
     let path_w = sessions.iter().map(|s| s.worktree_path.display().to_string().len()).max().unwrap_or(8).max(8);
 
     println!(
-        "{:<slug_w$}  {:<9}  {:<path_w$}  {:<10}  CREATED",
-        "SLUG", "CONTAINER", "WORKTREE", "WINDOW",
+        "{:<slug_w$}  {:<9}  {:<4}  {:<path_w$}  {:<10}  CREATED",
+        "SLUG", "CONTAINER", "AUTO", "WORKTREE", "WINDOW",
     );
-    println!("{}", "-".repeat(slug_w + 9 + path_w + 10 + 19 + 8));
+    println!("{}", "-".repeat(slug_w + 9 + 4 + path_w + 10 + 19 + 10));
 
     for s in &sessions {
         let container = s.container.as_ref().map(|c| c.runtime.as_str()).unwrap_or("—");
+        let auto = if s.auto { "yes" } else { "—" };
         let created = s.created_at.format("%Y-%m-%d %H:%M").to_string();
         println!(
-            "{:<slug_w$}  {:<9}  {:<path_w$}  {:<10}  {}",
+            "{:<slug_w$}  {:<9}  {:<4}  {:<path_w$}  {:<10}  {}",
             s.slug,
             container,
+            auto,
             s.worktree_path.display(),
             s.tmux_window,
             created,

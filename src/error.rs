@@ -31,6 +31,12 @@ pub enum AmError {
 
 
 
+    #[error("--auto requires container isolation; --no-container and --auto cannot be used together")]
+    AutoRequiresContainer,
+
+    #[error("--auto requires an agent; set one with --agent or configure `agent` in .am/config.toml")]
+    AutoRequiresAgent,
+
     #[error("container error: {0}")]
     ContainerError(String),
 
@@ -95,6 +101,18 @@ mod tests {
     fn container_image_not_configured_mentions_config() {
         let e = AmError::ContainerImageNotConfigured;
         assert!(e.to_string().contains("container.image"));
+    }
+
+    #[test]
+    fn auto_requires_container_mentions_no_container() {
+        let e = AmError::AutoRequiresContainer;
+        assert!(e.to_string().contains("--no-container"));
+    }
+
+    #[test]
+    fn auto_requires_agent_mentions_agent() {
+        let e = AmError::AutoRequiresAgent;
+        assert!(e.to_string().contains("--agent"));
     }
 
     #[test]

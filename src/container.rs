@@ -25,7 +25,6 @@ pub enum MountMode {
     ReadWrite,
 }
 
-
 #[derive(Debug, Clone)]
 pub struct AgentAuthMount {
     pub host_path: PathBuf,
@@ -59,23 +58,31 @@ pub fn detect_runtime(preference: RuntimePreference) -> Result<ContainerRuntime>
     match preference {
         RuntimePreference::Auto => {
             if let Some(bin) = find_bin("podman", "AM_PODMAN_BIN") {
-                return Ok(ContainerRuntime { kind: RuntimeKind::Podman, bin });
+                return Ok(ContainerRuntime {
+                    kind: RuntimeKind::Podman,
+                    bin,
+                });
             }
             if let Some(bin) = find_bin("docker", "AM_DOCKER_BIN") {
-                return Ok(ContainerRuntime { kind: RuntimeKind::Docker, bin });
+                return Ok(ContainerRuntime {
+                    kind: RuntimeKind::Docker,
+                    bin,
+                });
             }
             Err(AmError::ContainerRuntimeNotFound.into())
         }
-        RuntimePreference::Podman => {
-            find_bin("podman", "AM_PODMAN_BIN")
-                .map(|bin| ContainerRuntime { kind: RuntimeKind::Podman, bin })
-                .ok_or_else(|| AmError::RequestedContainerRuntimeNotFound("podman".to_string()).into())
-        }
-        RuntimePreference::Docker => {
-            find_bin("docker", "AM_DOCKER_BIN")
-                .map(|bin| ContainerRuntime { kind: RuntimeKind::Docker, bin })
-                .ok_or_else(|| AmError::RequestedContainerRuntimeNotFound("docker".to_string()).into())
-        }
+        RuntimePreference::Podman => find_bin("podman", "AM_PODMAN_BIN")
+            .map(|bin| ContainerRuntime {
+                kind: RuntimeKind::Podman,
+                bin,
+            })
+            .ok_or_else(|| AmError::RequestedContainerRuntimeNotFound("podman".to_string()).into()),
+        RuntimePreference::Docker => find_bin("docker", "AM_DOCKER_BIN")
+            .map(|bin| ContainerRuntime {
+                kind: RuntimeKind::Docker,
+                bin,
+            })
+            .ok_or_else(|| AmError::RequestedContainerRuntimeNotFound("docker".to_string()).into()),
     }
 }
 
@@ -121,7 +128,11 @@ pub fn resolve_mounts(
     // jj backend and must be mounted alongside .jj.
     let colocated_git_host = if matches!(vcs, Vcs::Jj) {
         let git = repo_root.join(".git");
-        if git.is_dir() { Some(git) } else { None }
+        if git.is_dir() {
+            Some(git)
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -129,7 +140,14 @@ pub fn resolve_mounts(
     let ssh_host = home.join(".ssh");
     let agent_auth = agent.map(resolve_agent_auth_mount).unwrap_or_default();
 
-    Ok(ContainerMounts { worktree_host, vcs_host, colocated_git_host, gitconfig_host, ssh_host, agent_auth })
+    Ok(ContainerMounts {
+        worktree_host,
+        vcs_host,
+        colocated_git_host,
+        gitconfig_host,
+        ssh_host,
+        agent_auth,
+    })
 }
 
 pub fn resolve_agent_auth_mount(agent: &str) -> Vec<AgentAuthMount> {
@@ -175,7 +193,16 @@ pub fn resolve_agent_auth_mount(agent: &str) -> Vec<AgentAuthMount> {
             mode: MountMode::ReadOnly,
         }],
         "codex" | "aider" => vec![], // env-var only, no filesystem mount
-        _unknown => vec![], // treat as a raw launch command — no auth mount
+        _unknown => vec![],          // treat as a raw launch command — no auth mount
+    }
+}
+
+/// Returns the extra CLI flags needed to run an agent in autonomous mode.
+/// Unknown agents get no flags — they must be configured by the user.
+pub fn agent_auto_flags(agent: &str) -> Vec<String> {
+    match agent {
+        "claude" => vec!["--dangerously-skip-permissions".to_string()],
+        _ => vec![],
     }
 }
 
@@ -189,13 +216,16 @@ pub fn validate_agent(agent: &str) -> Result<()> {
         .unwrap_or_else(|_| home.join(".claude"));
 
     let (required, label) = match agent {
-        "claude"  => (vec![config_dir], "claude"),
+        "claude" => (vec![config_dir], "claude"),
         "copilot" => (vec![home.join(".config").join("gh")], "copilot"),
-        "gemini"  => (vec![home.join(".gemini")], "gemini"),
-        "codex"   => return Ok(()), // env-var only, no filesystem check
-        unknown   => return Err(AmError::ConfigError(format!(
-            "unknown agent '{unknown}' — valid agents are: claude, copilot, gemini, codex",
-        )).into()),
+        "gemini" => (vec![home.join(".gemini")], "gemini"),
+        "codex" => return Ok(()), // env-var only, no filesystem check
+        unknown => {
+            return Err(AmError::ConfigError(format!(
+                "unknown agent '{unknown}' — valid agents are: claude, copilot, gemini, codex",
+            ))
+            .into())
+        }
     };
 
     for path in &required {
@@ -204,7 +234,8 @@ pub fn validate_agent(agent: &str) -> Result<()> {
                 "agent '{label}' requires {path} to exist on the host — \
                  make sure {label} is installed and authenticated",
                 path = path.display(),
-            )).into());
+            ))
+            .into());
         }
     }
     Ok(())
@@ -234,12 +265,22 @@ pub fn build_run_command(
     // Worktree mount — same path inside the container as on the host
     let worktree_str = mounts.worktree_host.to_string_lossy();
     cmd.push("-v".to_string());
-    cmd.push(mount_str(&mounts.worktree_host, &worktree_str, MountMode::ReadWrite, selinux));
+    cmd.push(mount_str(
+        &mounts.worktree_host,
+        &worktree_str,
+        MountMode::ReadWrite,
+        selinux,
+    ));
 
     // VCS dir mount — same path inside the container as on the host
     let vcs_str = mounts.vcs_host.to_string_lossy();
     cmd.push("-v".to_string());
-    cmd.push(mount_str(&mounts.vcs_host, &vcs_str, MountMode::ReadWrite, selinux));
+    cmd.push(mount_str(
+        &mounts.vcs_host,
+        &vcs_str,
+        MountMode::ReadWrite,
+        selinux,
+    ));
 
     // Colocated jj+git: mount the git object store alongside .jj
     if let Some(ref git) = mounts.colocated_git_host {
@@ -250,11 +291,21 @@ pub fn build_run_command(
 
     // ~/.gitconfig
     cmd.push("-v".to_string());
-    cmd.push(mount_str(&mounts.gitconfig_host, "/root/.gitconfig", MountMode::ReadOnly, selinux));
+    cmd.push(mount_str(
+        &mounts.gitconfig_host,
+        "/root/.gitconfig",
+        MountMode::ReadOnly,
+        selinux,
+    ));
 
     // ~/.ssh
     cmd.push("-v".to_string());
-    cmd.push(mount_str(&mounts.ssh_host, "/root/.ssh", MountMode::ReadOnly, selinux));
+    cmd.push(mount_str(
+        &mounts.ssh_host,
+        "/root/.ssh",
+        MountMode::ReadOnly,
+        selinux,
+    ));
 
     // Agent auth mounts
     for auth in &mounts.agent_auth {
@@ -354,6 +405,19 @@ mod tests {
 
     fn lock_env() -> std::sync::MutexGuard<'static, ()> {
         ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    #[test]
+    fn agent_auto_flags_claude_returns_skip_permissions() {
+        let flags = agent_auto_flags("claude");
+        assert_eq!(flags, vec!["--dangerously-skip-permissions"]);
+    }
+
+    #[test]
+    fn agent_auto_flags_unknown_agent_returns_empty() {
+        assert!(agent_auto_flags("aider").is_empty());
+        assert!(agent_auto_flags("codex").is_empty());
+        assert!(agent_auto_flags("my-custom-agent").is_empty());
     }
 
     fn fake_runtime(kind: RuntimeKind, dir: &Path) -> ContainerRuntime {
@@ -550,7 +614,10 @@ mod tests {
         let mounts = resolve_mounts("feat", tmp.path(), &Vcs::Git, Some("claude")).unwrap();
         assert_eq!(mounts.agent_auth.len(), 2);
         assert_eq!(mounts.agent_auth[0].host_path, tmp.path().join(".claude"));
-        assert_eq!(mounts.agent_auth[0].container_path, PathBuf::from("/root/.claude"));
+        assert_eq!(
+            mounts.agent_auth[0].container_path,
+            PathBuf::from("/root/.claude")
+        );
 
         std::env::remove_var("HOME");
     }
@@ -558,18 +625,28 @@ mod tests {
     // ── build_run_command ─────────────────────────────────────────────────────
 
     fn podman_runtime() -> ContainerRuntime {
-        ContainerRuntime { kind: RuntimeKind::Podman, bin: PathBuf::from("/usr/bin/podman") }
+        ContainerRuntime {
+            kind: RuntimeKind::Podman,
+            bin: PathBuf::from("/usr/bin/podman"),
+        }
     }
 
     fn docker_runtime() -> ContainerRuntime {
-        ContainerRuntime { kind: RuntimeKind::Docker, bin: PathBuf::from("/usr/bin/docker") }
+        ContainerRuntime {
+            kind: RuntimeKind::Docker,
+            bin: PathBuf::from("/usr/bin/docker"),
+        }
     }
 
     #[test]
     fn build_run_command_includes_required_flags() {
         let tmp = TempDir::new().unwrap();
         let mounts = make_mounts(tmp.path());
-        let worktree = tmp.path().join("worktrees/feat").to_string_lossy().into_owned();
+        let worktree = tmp
+            .path()
+            .join("worktrees/feat")
+            .to_string_lossy()
+            .into_owned();
         let cmd = build_run_command(
             &podman_runtime(),
             "ubuntu:25.10",
@@ -589,14 +666,21 @@ mod tests {
         assert!(joined.contains(&format!("--workdir {worktree}")));
         assert!(joined.contains("ubuntu:25.10"));
         assert!(!joined.contains("GIT_DIR"), "GIT_DIR should not be set");
-        assert!(!joined.contains("GIT_WORK_TREE"), "GIT_WORK_TREE should not be set");
+        assert!(
+            !joined.contains("GIT_WORK_TREE"),
+            "GIT_WORK_TREE should not be set"
+        );
     }
 
     #[test]
     fn build_run_command_includes_all_mounts() {
         let tmp = TempDir::new().unwrap();
         let mounts = make_mounts(tmp.path());
-        let worktree = tmp.path().join("worktrees/feat").to_string_lossy().into_owned();
+        let worktree = tmp
+            .path()
+            .join("worktrees/feat")
+            .to_string_lossy()
+            .into_owned();
         let git = tmp.path().join(".git").to_string_lossy().into_owned();
         let cmd = build_run_command(
             &docker_runtime(),
@@ -618,7 +702,11 @@ mod tests {
     fn build_run_command_mounts_use_host_paths() {
         let tmp = TempDir::new().unwrap();
         let mounts = make_mounts(tmp.path());
-        let worktree = tmp.path().join("worktrees/feat").to_string_lossy().into_owned();
+        let worktree = tmp
+            .path()
+            .join("worktrees/feat")
+            .to_string_lossy()
+            .into_owned();
         let git = tmp.path().join(".git").to_string_lossy().into_owned();
         let cmd = build_run_command(
             &podman_runtime(),
@@ -631,9 +719,18 @@ mod tests {
         );
         let joined = cmd.join(" ");
         // Container path should equal host path for worktree and vcs
-        assert!(joined.contains(&format!("{worktree}:{worktree}")), "worktree mount should use host path: {joined}");
-        assert!(joined.contains(&format!("{git}:{git}")), "vcs mount should use host path: {joined}");
-        assert!(joined.contains(&format!("--workdir {worktree}")), "workdir should be worktree path: {joined}");
+        assert!(
+            joined.contains(&format!("{worktree}:{worktree}")),
+            "worktree mount should use host path: {joined}"
+        );
+        assert!(
+            joined.contains(&format!("{git}:{git}")),
+            "vcs mount should use host path: {joined}"
+        );
+        assert!(
+            joined.contains(&format!("--workdir {worktree}")),
+            "workdir should be worktree path: {joined}"
+        );
     }
 
     #[test]
@@ -653,9 +750,15 @@ mod tests {
         // On Linux with Podman, all mounts should have ,z
         // On macOS they should not — test what the current platform does
         if cfg!(target_os = "linux") {
-            assert!(joined.contains(",z"), "expected ,z on Linux+Podman, got: {joined}");
+            assert!(
+                joined.contains(",z"),
+                "expected ,z on Linux+Podman, got: {joined}"
+            );
         } else {
-            assert!(!joined.contains(",z"), "unexpected ,z on non-Linux, got: {joined}");
+            assert!(
+                !joined.contains(",z"),
+                "unexpected ,z on non-Linux, got: {joined}"
+            );
         }
     }
 
@@ -673,7 +776,10 @@ mod tests {
             "am-feat",
         );
         let joined = cmd.join(" ");
-        assert!(!joined.contains(",z"), "Docker should never have ,z: {joined}");
+        assert!(
+            !joined.contains(",z"),
+            "Docker should never have ,z: {joined}"
+        );
     }
 
     #[test]
@@ -762,7 +868,10 @@ mod tests {
         assert_eq!(mounts[0].container_path, PathBuf::from("/root/.claude"));
         assert_eq!(mounts[0].mode, MountMode::ReadWrite);
         assert_eq!(mounts[1].host_path, tmp.path().join(".claude.json"));
-        assert_eq!(mounts[1].container_path, PathBuf::from("/root/.claude.json"));
+        assert_eq!(
+            mounts[1].container_path,
+            PathBuf::from("/root/.claude.json")
+        );
         assert_eq!(mounts[1].mode, MountMode::ReadWrite);
 
         std::env::remove_var("HOME");
@@ -782,7 +891,10 @@ mod tests {
         assert_eq!(mounts[0].container_path, PathBuf::from("/root/.claude"));
         assert_eq!(mounts[0].mode, MountMode::ReadWrite);
         assert_eq!(mounts[1].host_path, tmp.path().join(".claude.json"));
-        assert_eq!(mounts[1].container_path, PathBuf::from("/root/.claude.json"));
+        assert_eq!(
+            mounts[1].container_path,
+            PathBuf::from("/root/.claude.json")
+        );
 
         std::env::remove_var("CLAUDE_CONFIG_DIR");
         std::env::remove_var("HOME");
@@ -811,7 +923,10 @@ mod tests {
             "am-feat",
         );
         let joined = cmd.join(" ");
-        assert!(joined.contains("/root/.claude"), "expected claude mount, got: {joined}");
+        assert!(
+            joined.contains("/root/.claude"),
+            "expected claude mount, got: {joined}"
+        );
 
         std::env::remove_var("HOME");
     }
@@ -924,11 +1039,21 @@ mod tests {
         assert_eq!(mounts.len(), 2);
 
         let paths: Vec<_> = mounts.iter().map(|m| m.host_path.clone()).collect();
-        assert!(paths.contains(&tmp.path().join(".config").join("gh")), "missing gh config");
-        assert!(paths.contains(&tmp.path().join(".config").join("github-copilot")), "missing github-copilot config");
+        assert!(
+            paths.contains(&tmp.path().join(".config").join("gh")),
+            "missing gh config"
+        );
+        assert!(
+            paths.contains(&tmp.path().join(".config").join("github-copilot")),
+            "missing github-copilot config"
+        );
 
         for m in &mounts {
-            assert_eq!(m.mode, MountMode::ReadOnly, "copilot mounts should be read-only");
+            assert_eq!(
+                m.mode,
+                MountMode::ReadOnly,
+                "copilot mounts should be read-only"
+            );
         }
 
         std::env::remove_var("HOME");

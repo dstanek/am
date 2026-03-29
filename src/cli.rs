@@ -35,6 +35,9 @@ pub enum Commands {
         /// Disable container isolation for this session (overrides config)
         #[arg(long)]
         no_container: bool,
+        /// Run agent in autonomous mode (skips all tool approval prompts; requires container)
+        #[arg(long)]
+        auto: bool,
     },
 
     /// List all sessions

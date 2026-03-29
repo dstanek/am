@@ -23,6 +23,8 @@ pub struct Session {
     pub shell_pane: String,
     pub created_at: DateTime<Utc>,
     pub container: Option<SessionContainer>,
+    #[serde(default)]
+    pub auto: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -97,6 +99,7 @@ mod tests {
             shell_pane: format!("am-{slug}.1"),
             created_at: Utc::now(),
             container: None,
+            auto: false,
         }
     }
 
