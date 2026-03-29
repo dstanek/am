@@ -13,9 +13,26 @@ Claude Code is the recommended agent for use with `am`. This guide covers buildi
 
 ## Container image
 
-`am` mounts `~/.claude` from your host into the container as read-only at runtime. This means your credentials are never baked into the image — you can share or publish the image safely. The Dockerfile only needs to install Claude Code and the tools you want available in the agent environment.
+`am` mounts `~/.claude` from your host into the container as read-only at runtime. This means your credentials are never baked into the image — you can share or publish the image safely.
 
-The `dockerfiles/Dockerfile.claude` file included in this repository is a production-ready starting point:
+### Pull the pre-built image (recommended)
+
+A ready-to-use image is published to the GitHub Container Registry:
+
+```sh
+# Docker
+docker pull ghcr.io/dstanek/am-claude:latest
+
+# Podman
+podman pull ghcr.io/dstanek/am-claude:latest
+```
+
+!!! tip "Pin to a specific version"
+    For reproducible environments, replace `:latest` with a specific release tag (e.g. `ghcr.io/dstanek/am-claude:0.2.0`). Check the [releases page](https://github.com/dstanek/am/releases) for available tags.
+
+### Build from source
+
+If you need to add project-specific tools, the `dockerfiles/Dockerfile.claude` file in this repository is a production-ready starting point:
 
 ```dockerfile
 FROM ubuntu:25.10
@@ -65,7 +82,7 @@ Set the image and agent in `.am/config.toml`:
 
 ```toml
 [container]
-image = "am-claude:latest"
+image = "ghcr.io/dstanek/am-claude:latest"
 agent = "claude"
 ```
 
@@ -132,7 +149,7 @@ If you prefer to authenticate via API key rather than the `~/.claude` credential
 
 ```toml
 [container]
-image = "am-claude:latest"
+image = "ghcr.io/dstanek/am-claude:latest"
 agent = "claude"
 env = ["ANTHROPIC_API_KEY"]
 ```

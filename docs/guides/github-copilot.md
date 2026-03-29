@@ -19,7 +19,26 @@ gh auth status
 
 ## Container image
 
-`am` mounts your GitHub credentials from the host at runtime, so nothing sensitive is baked into the image. The `dockerfiles/Dockerfile.copilot` file included in this repository installs the GitHub CLI and the Copilot CLI package:
+`am` mounts your GitHub credentials from the host at runtime, so nothing sensitive is baked into the image.
+
+### Pull the pre-built image (recommended)
+
+A ready-to-use image is published to the GitHub Container Registry:
+
+```sh
+# Docker
+docker pull ghcr.io/dstanek/am-copilot:latest
+
+# Podman
+podman pull ghcr.io/dstanek/am-copilot:latest
+```
+
+!!! tip "Pin to a specific version"
+    For reproducible environments, replace `:latest` with a specific release tag (e.g. `ghcr.io/dstanek/am-copilot:0.2.0`). Check the [releases page](https://github.com/dstanek/am/releases) for available tags.
+
+### Build from source
+
+If you need to add project-specific tools, the `dockerfiles/Dockerfile.copilot` file in this repository installs the GitHub CLI and the Copilot CLI package:
 
 ```dockerfile
 FROM ubuntu:25.10
@@ -74,7 +93,7 @@ Set the image and agent in `.am/config.toml`:
 
 ```toml
 [container]
-image = "am-copilot:latest"
+image = "ghcr.io/dstanek/am-copilot:latest"
 agent = "copilot"
 ```
 

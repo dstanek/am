@@ -67,7 +67,7 @@ agent = "claude"
 The `agent` field activates the built-in agent integration for that agent. Setting `agent = "claude"` tells `am` to mount your `~/.claude` credentials directory into every container session started from this project.
 
 !!! tip "Need a ready-to-use image?"
-    See the [Claude Code guide](../guides/claude-code.md) for a complete `Dockerfile` that installs Claude Code along with common developer tools. Build it once and reference the image tag here.
+    Pre-built images are available on the GitHub Container Registry: `ghcr.io/dstanek/am-claude:latest` and `ghcr.io/dstanek/am-copilot:latest`. See the [Claude Code guide](../guides/claude-code.md) or [GitHub Copilot guide](../guides/github-copilot.md) for full setup instructions, including how to build a custom image.
 
 ---
 
