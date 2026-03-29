@@ -380,9 +380,15 @@ fn cmd_generate_config() -> anyhow::Result<()> {
 fn find_repo_root() -> anyhow::Result<PathBuf> {
     let mut dir = std::env::current_dir()?;
     loop {
-        // .git in a worktree is a FILE pointing back to the main repo;
+        // .git in a git worktree is a FILE pointing back to the main repo;
         // only stop when we find it as a DIRECTORY (the actual repo root).
-        if dir.join(".jj").is_dir() || dir.join(".git").is_dir() {
+        if dir.join(".git").is_dir() {
+            return Ok(dir);
+        }
+        // .jj exists in both the main repo and additional workspaces.
+        // In the main repo, .jj/repo is a directory (the object store).
+        // In a workspace, .jj/repo is a symlink — keep walking up.
+        if dir.join(".jj").is_dir() && dir.join(".jj").join("repo").is_dir() {
             return Ok(dir);
         }
         match dir.parent() {
