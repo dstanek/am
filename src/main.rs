@@ -135,11 +135,9 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool) -> anyhow
             &format!("am-{slug}"),
         );
 
-        // Outside tmux: append the agent as the container CMD so it launches directly
-        if !tmux::is_in_tmux() {
-            if let Some(ref agent) = effective_agent {
-                cmd.push(agent.clone());
-            }
+        // Append the agent as the container CMD so it launches automatically
+        if let Some(ref agent) = effective_agent {
+            cmd.push(agent.clone());
         }
 
         let sc = session::SessionContainer {
@@ -159,24 +157,28 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool) -> anyhow
     let window_name = format!("am-{slug}");
 
     if tmux::is_in_tmux() {
-        tmux::create_window(&window_name, &worktree_path)
-            .map_err(|e| anyhow::anyhow!(
-                "{e}\nHint: a window named '{window_name}' may already exist — run 'am clean {slug}' first"
-            ))?;
-        tmux::split_window(&window_name, &worktree_path, &cfg.tmux.split)?;
-
-        // Send container run command to agent pane (pane 0)
         if let Some(ref cmd) = container_cmd {
-            let full_cmd = cmd.join(" ");
-            tmux::send_keys(&tmux::get_pane_id(&window_name, 0), &full_cmd)?;
-
-            // Auto-launch agent inside the container after startup delay
+            // Run the container command directly as the pane's shell command so
+            // it is never echoed as keystrokes. Clear the pane on exit.
+            tmux::create_window_with_shell_cmd(
+                &window_name,
+                &worktree_path,
+                &format!("{}; clear", cmd.join(" ")),
+            )
+                .map_err(|e| anyhow::anyhow!(
+                    "{e}\nHint: a window named '{window_name}' may already exist — run 'am clean {slug}' first"
+                ))?;
+        } else {
+            tmux::create_window(&window_name, &worktree_path)
+                .map_err(|e| anyhow::anyhow!(
+                    "{e}\nHint: a window named '{window_name}' may already exist — run 'am clean {slug}' first"
+                ))?;
+            // No container — launch agent directly in the pane if specified
             if let Some(ref agent) = effective_agent {
-                std::thread::sleep(std::time::Duration::from_millis(cfg.container.startup_delay_ms));
                 tmux::send_keys(&tmux::get_pane_id(&window_name, 0), agent)?;
             }
         }
-
+        tmux::split_window(&window_name, &worktree_path, &cfg.tmux.split)?;
         tmux::select_pane(&tmux::get_pane_id(&window_name, 0))?;
         tmux::select_window(&window_name)?;
     } else if let Some(ref cmd) = container_cmd {

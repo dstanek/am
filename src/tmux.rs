@@ -45,6 +45,20 @@ pub fn create_window(window_name: &str, working_dir: &Path) -> Result<()> {
     ])
 }
 
+/// Like `create_window`, but runs `shell_cmd` directly as the pane command
+/// (`tmux new-window ... <shell_cmd>`). The command is passed to the default
+/// shell via `-c`; it is never echoed into the pane as keystrokes.
+pub fn create_window_with_shell_cmd(window_name: &str, working_dir: &Path, shell_cmd: &str) -> Result<()> {
+    run_tmux(&[
+        "new-window",
+        "-n",
+        window_name,
+        "-c",
+        working_dir.to_str().unwrap_or("."),
+        shell_cmd,
+    ])
+}
+
 /// Split an existing window.
 /// Horizontal: `tmux split-window -h -c <working_dir> -t <window_name>`
 /// Vertical:   `tmux split-window -v -c <working_dir> -t <window_name>`
@@ -174,6 +188,16 @@ mod tests {
         assert!(out.contains("-n"), "expected -n flag");
         assert!(out.contains("am-feat"));
         assert!(out.contains("/tmp/worktree"));
+    }
+
+    #[test]
+    fn create_window_with_shell_cmd_passes_cmd_as_argument() {
+        let mock = MockTmux::new();
+        create_window_with_shell_cmd("am-feat", Path::new("/tmp/worktree"), "podman run --rm foo; clear").unwrap();
+        let out = mock.captured();
+        assert!(out.contains("new-window"), "expected new-window, got: {out}");
+        assert!(out.contains("am-feat"));
+        assert!(out.contains("podman run --rm foo; clear"));
     }
 
     #[test]
