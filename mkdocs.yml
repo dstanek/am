@@ -51,6 +51,7 @@ nav:
   - Reference:
     - Commands: reference/commands.md
     - Configuration: reference/configuration.md
+    - Commit Trailers: reference/commit-trailers.md
 
 plugins:
   - search

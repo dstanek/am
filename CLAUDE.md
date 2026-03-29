@@ -49,14 +49,23 @@ This repo uses **jj (Jujutsu)**. Use `jj` commands instead of `git` for all VCS 
 
 Commits use **Conventional Commits** format: `type(scope): description` (e.g., `feat(container): add Codex auth preset`, `fix(config): handle missing home dir`). After successfully implementing a feature, create a commit using `jj commit -m "..."` (not `jj describe`) so the working copy is left clean and empty.
 
-Commit messages should end with a footer separated by `---`:
+Commit messages should end with a footer separated by `---`. Use the trailer that matches how the agent was involved:
+
+| Trailer | When to use |
+|---|---|
+| `Co-Piloted-By` | Interactive session — agent wrote or modified code with the user directing |
+| `Auto-Piloted-By` | Autonomous session — agent worked independently (`--auto`) |
+| `Co-Reviewed-By` | Interactive review — agent reviewed code with the user |
+| `Auto-Reviewed-By` | Autonomous review — agent reviewed code independently |
+
+The value is always `am via <agent name>`. Claude Code sessions are interactive by default, so the standard trailer is:
 
 ```
 ---
 Co-Piloted-By: am via Claude Code
 ```
 
-Use the appropriate agent name in place of `Claude Code` (e.g., `GitHub Copilot`, `Gemini`, `Codex`, `Aider`).
+See `docs/reference/commit-trailers.md` for full documentation and examples.
 
 ## Key Reference Files
 
