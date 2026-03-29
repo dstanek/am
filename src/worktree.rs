@@ -121,6 +121,25 @@ pub fn remove_jj_workspace(slug: &str, repo_root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Returns true if the git worktree at `worktree_path` has any uncommitted changes
+/// (staged, unstaged, or untracked). Returns false if the path doesn't exist or
+/// any error occurs — callers use this for a best-effort warning only.
+pub fn git_worktree_has_changes(worktree_path: &Path) -> bool {
+    let repo = match Repository::open(worktree_path) {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+    let mut opts = git2::StatusOptions::new();
+    opts.include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .include_ignored(false);
+    let result = match repo.statuses(Some(&mut opts)) {
+        Ok(statuses) => !statuses.is_empty(),
+        Err(_) => false,
+    };
+    result
+}
+
 /// Remove the git worktree for `slug` and delete the `am/<slug>` branch.
 pub fn remove_git_worktree(slug: &str, repo_root: &Path) -> Result<()> {
     let repo = Repository::open(repo_root)

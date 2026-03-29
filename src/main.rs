@@ -340,6 +340,15 @@ fn cmd_destroy(slug: &str, force: bool) -> anyhow::Result<()> {
     }
 
     if !force {
+        // Warn about uncommitted changes in git worktrees only.
+        let vcs_check = worktree::detect_vcs(&repo_root).unwrap_or(config::Vcs::Git);
+        if matches!(vcs_check, config::Vcs::Git) {
+            if let Some(s) = session::find_session(&sessions, slug) {
+                if worktree::git_worktree_has_changes(&s.worktree_path) {
+                    eprintln!("\x1b[31mWarning: the worktree has uncommitted changes that will be lost.\x1b[0m");
+                }
+            }
+        }
         print!("Remove worktree and kill tmux window for '{slug}'? [y/N] ");
         std::io::stdout().flush()?;
         let mut input = String::new();
