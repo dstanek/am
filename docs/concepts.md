@@ -12,7 +12,7 @@ A **session** is the central unit of work in `am`. When you run `am start`, a se
 - A **tmux window** with a split-pane layout
 - An optional **container** wrapping the agent process
 
-Sessions are tracked in `.am/sessions.json` and displayed by `am list`. When you're done, `am clean` tears down all the pieces in one command.
+Sessions are tracked in `.am/sessions.json` and displayed by `am list`. When you're done, `am destroy` tears down all the pieces in one command.
 
 The key idea is that a session is self-contained. Two sessions can run simultaneously in the same repository without stepping on each other, because each one has its own branch, its own terminal, and (optionally) its own container.
 
@@ -43,7 +43,7 @@ This naming convention makes it easy to find what belongs to a session no matter
 - **git repos** — `am start` runs `git worktree add .am/worktrees/<slug> -b am/<slug>`, creating a new branch and a separate checkout directory. The agent's changes accumulate on `am/<slug>` without touching your current branch.
 - **jj repos** — `am start` runs `jj workspace add .am/worktrees/<slug> --name <slug>`, creating an independent workspace. jj resolves the repo by walking up from the workspace directory.
 
-In both cases, the checkout lives at `.am/worktrees/<slug>` and is removed when you run `am clean`.
+In both cases, the checkout lives at `.am/worktrees/<slug>` and is removed when you run `am destroy`.
 
 ---
 

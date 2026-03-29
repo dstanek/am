@@ -5,7 +5,7 @@ user is not running inside tmux. This is confusing.
 
 ## Problem
 
-For example, `am clean` says:
+For example, `am destroy` says:
 
 > "Remove worktree and kill tmux window for 'feat'? [y/N]"
 
@@ -42,9 +42,9 @@ Produce two variants for each: one for inside-tmux, one for outside-tmux.
 
 ## Tests
 
-- When `$TMUX` is not set, `am clean <slug> --force` output does not mention "tmux window"
-- When `$TMUX` is set, `am clean <slug> --force` output includes "tmux window"
-- Same coverage for the `am clean` confirmation prompt (without `--force`)
+- When `$TMUX` is not set, `am destroy <slug> --force` output does not mention "tmux window"
+- When `$TMUX` is set, `am destroy <slug> --force` output includes "tmux window"
+- Same coverage for the `am destroy` confirmation prompt (without `--force`)
 
 ## Implementation
 

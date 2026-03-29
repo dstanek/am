@@ -91,9 +91,9 @@ Agent on one side of a split-pane tmux window, your shell on the other. Watch mu
 <div class="feature-card" markdown>
 <span class="feature-card__icon">:material-delete-forever:</span>
 
-### One Command Cleanup
+### One Command Teardown
 
-`am clean <slug>` stops the container, kills the window, removes the branch. Completely gone in seconds. No orphaned resources.
+`am destroy <slug>` stops the container, kills the window, removes the branch. Completely gone in seconds. No orphaned resources.
 
 </div>
 
@@ -126,8 +126,8 @@ Agent on one side of a split-pane tmux window, your shell on the other. Watch mu
     <span class="out">feature   claude    am-feature    3 min ago</span><br>
     <span class="out">tests     copilot   am-tests      1 min ago</span>
     <span class="spacer"></span>
-    <span class="prompt">$ </span><span class="cmd">am clean feature --force</span><br>
-    <span class="ok">✓</span> <span class="out">Container stopped · Worktree removed · Session cleaned</span>
+    <span class="prompt">$ </span><span class="cmd">am destroy feature --force</span><br>
+    <span class="ok">✓</span> <span class="out">Container stopped · Worktree removed · Session destroyed</span>
   </div>
 </div>
 

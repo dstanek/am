@@ -44,7 +44,7 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 ## Feature 1: Git Worktree Management
 
-> Create, list, and remove git worktrees. The core of `am start` and `am clean`.
+> Create, list, and remove git worktrees. The core of `am start` and `am destroy`.
 
 - [x] **Design**
   - [x] Confirm branch naming: `am/<slug>` off current `HEAD`
@@ -65,10 +65,10 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
   - [x] `am init` command — create `.am/`, write default config, write empty `sessions.json`, append `.am/` to `.gitignore`
   - [x] `am start <slug>` — worktree creation only (no tmux, no container)
   - [x] `am list` — tabular output from `sessions.json`; empty state message
-  - [x] `am clean <slug> [--force]` — remove worktree, remove session record, confirmation prompt
+  - [x] `am destroy <slug> [--force]` — remove worktree, remove session record, confirmation prompt
   - [x] Slug validation wired into clap
 
-- [x] **UX Review** — `am init` → `am start feat` → `am list` → `am clean feat` full cycle feels right
+- [x] **UX Review** — `am init` → `am start feat` → `am list` → `am destroy feat` full cycle feels right
 
 ---
 
@@ -79,7 +79,7 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 - [x] **Design**
   - [x] Decide pane assignment: `am-<slug>.0` = agent pane, `am-<slug>.1` = shell pane
   - [x] Default layout: 50/50 horizontal split; configurable via `TmuxConfig`
-  - [x] Window naming collision strategy: error + tell user to run `am clean`
+  - [x] Window naming collision strategy: error + tell user to run `am destroy`
   - [x] Behaviour when not inside tmux: print worktree path, no error, no tmux ops
 
 - [x] **Tests**
@@ -94,9 +94,9 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
   - [x] Wire tmux into `am start`: create window → split → select agent pane → switch focus
   - [x] `am attach <slug>` — `select_window` to existing session
   - [x] `am run <slug> <agent>` — `send_keys` agent command to agent pane, switch focus
-  - [x] `am clean` — kill tmux window (ignore if not present)
+  - [x] `am destroy` — kill tmux window (ignore if not present)
 
-- [x] **UX Review** — `am start feat` opens a correctly split window; `am attach feat` switches to it; `am clean feat` tears it down
+- [x] **UX Review** — `am start feat` opens a correctly split window; `am attach feat` switches to it; `am destroy feat` tears it down
 
 ---
 
@@ -126,10 +126,10 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
   - [x] `src/container.rs` — `detect_runtime()`, `resolve_mounts()`, `build_run_command()`, `stop_container()`, `remove_container()`
   - [x] `ContainerMounts`, `AgentAuthMount`, `MountMode`, `ContainerRuntime` types
   - [x] Wire container into `am start`: resolve mounts → build command → `send_keys` to agent pane (tmux) or `exec()` (no tmux)
-  - [x] `am clean` — stop + remove container before removing worktree
+  - [x] `am destroy` — stop + remove container before removing worktree
   - [x] `--no-container` flag wired in `am start`
 
-- [x] **UX Review** — `am start feat` (with image configured) launches a Podman container in the agent pane with correct mounts; `am clean feat` stops and removes it
+- [x] **UX Review** — `am start feat` (with image configured) launches a Podman container in the agent pane with correct mounts; `am destroy feat` stops and removes it
 
 ---
 
@@ -307,9 +307,9 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
   - [x] `create_jj_workspace()` and `remove_jj_workspace()` in `worktree.rs`
   - [x] jj mount layout in `resolve_mounts()`
   - [x] `detect_vcs` updated to check `.jj` before `.git`
-  - [x] `am start` and `am clean` use VCS-appropriate functions
+  - [x] `am start` and `am destroy` use VCS-appropriate functions
 
-- [x] **UX Review** — `am start feat` in a jj repo creates a workspace; container mounts are correct; `am clean feat` tears down cleanly
+- [x] **UX Review** — `am start feat` in a jj repo creates a workspace; container mounts are correct; `am destroy feat` tears down cleanly
 
 ---
 
@@ -330,7 +330,7 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
   - [x] Global config loaded when project config absent *(existing tests)*
   - [x] Env vars override project config (`env_vars_override_project_config` in `config.rs`)
   - [x] Slug validation: boundary conditions (1 char, 40 chars, 41 chars, invalid chars) *(done in Feature 1)*
-  - [ ] Integration: `am start` → `am list` → `am clean` full flow
+  - [ ] Integration: `am start` → `am list` → `am destroy` full flow
 
 - [ ] **Implementation**
   - [x] Global config path and loading in `config.rs`
@@ -392,7 +392,7 @@ switcher to the Material theme UI. The CI release workflow would call
 ### Bug: Context-aware user messages
 > Spec: [`specs/context-aware-messages.md`](specs/context-aware-messages.md)
 
-Commands like `am clean` currently say "Remove worktree and kill tmux window" even when
+Commands like `am destroy` currently say "Remove worktree and kill tmux window" even when
 not running inside tmux. All user-facing strings should reflect the actual runtime context.
 
 **Approach:** introduce a `Messages` trait (or pair of structs — `TmuxMessages` and
@@ -406,14 +406,14 @@ wording. No conditional `if is_in_tmux()` checks scattered through command handl
 ## Completed Features
 
 - [x] **Feature 0: Foundation** — project skeleton, error types, config loading, session state
-- [x] **Feature 1: Git Worktree Management** — `am start`, `am list`, `am clean` with real git worktrees
+- [x] **Feature 1: Git Worktree Management** — `am start`, `am list`, `am destroy` with real git worktrees
 - [x] **Feature 2: tmux Integration** — split-pane windows, `am attach` (create-or-attach), `am run`
 - [x] **Feature 3: Podman Container Integration** — rootless containers, git mount layout, `exec()` outside tmux
 - [x] **Feature 4: Claude Code Integration** — `~/.claude` mount preset, auto-launch in container
 - [x] **Feature 5: Docker Support** — runtime fallback, no `,z` labels
 - [x] **Feature 6: Copilot Integration** — `Dockerfile.copilot` with gh + `@github/copilot`; `~/.config/gh` mount preset
 - [x] **Feature 10: Unknown Agent Handling** — early validation rejects unknown agents with clear error + valid agent list
-- [x] **Feature 11: jj Workspace Support** — `create/remove_jj_workspace`, VCS dispatch in `am start`/`am clean`
+- [x] **Feature 11: jj Workspace Support** — `create/remove_jj_workspace`, VCS dispatch in `am start`/`am destroy`
 
 ---
 
@@ -423,7 +423,7 @@ Track design decisions made during implementation:
 
 | # | Question | Decision | Feature |
 |---|---|---|---|
-| 1 | Window naming collision | Error + tell user to run `am clean` | tmux |
+| 1 | Window naming collision | Error + tell user to run `am destroy` | tmux |
 | 2 | Branch base | Current `HEAD` | git worktree |
 | 3 | Split ratio | Configurable `split_percent`, default 50 | tmux |
 | 4 | `am done` / lifecycle notifications | Removed `am done`; deferred to v2 as automatic pane-exit detection + OS notification | lifecycle |

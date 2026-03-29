@@ -8,7 +8,7 @@ pub enum AmError {
     #[error("not inside a tmux session (run inside tmux or use 'tmux new-session' first)")]
     NotInTmux,
 
-    #[error("slug '{0}' already exists — run 'am clean {0}' first")]
+    #[error("slug '{0}' already exists — run 'am destroy {0}' first")]
     SlugAlreadyExists(String),
 
     #[error("slug '{0}' not found — run 'am list' to see active sessions")]
@@ -62,7 +62,7 @@ mod tests {
         let e = AmError::SlugAlreadyExists("feat".to_string());
         let msg = e.to_string();
         assert!(msg.contains("feat"));
-        assert!(msg.contains("am clean feat"));
+        assert!(msg.contains("am destroy feat"));
     }
 
     #[test]

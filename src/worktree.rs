@@ -149,6 +149,7 @@ pub fn remove_git_worktree(slug: &str, repo_root: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use git2::Signature;
     use std::sync::Mutex;
     use tempfile::TempDir;
 

@@ -29,7 +29,7 @@ make build-copilot           # Build Copilot Docker image
 - `worktree.rs` — git worktree (`git worktree add`) and jj workspace (`jj workspace add`) operations
 - `tmux.rs` — tmux window/pane creation and management
 - `container.rs` — Podman/Docker container lifecycle; mount resolution; agent auth presets
-- `main.rs` — command handler functions (`cmd_init`, `cmd_start`, `cmd_list`, `cmd_attach`, `cmd_run`, `cmd_clean`, `cmd_generate_config`)
+- `main.rs` — command handler functions (`cmd_init`, `cmd_start`, `cmd_list`, `cmd_attach`, `cmd_run`, `cmd_destroy`, `cmd_generate_config`)
 
 **VCS detection:** checks for `.jj/` first, falls back to `.git`, errors if neither found.
 

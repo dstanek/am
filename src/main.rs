@@ -30,7 +30,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Commands::List => cmd_list(),
         Commands::Attach { slug } => cmd_attach(&slug),
         Commands::Run { slug, agent } => cmd_run(&slug, &agent),
-        Commands::Clean { slug, force } => cmd_clean(&slug, force),
+        Commands::Destroy { slug, force } => cmd_destroy(&slug, force),
         Commands::GenerateConfig => cmd_generate_config(),
     }
 }
@@ -166,12 +166,12 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool) -> anyhow
                 &format!("{}; clear", cmd.join(" ")),
             )
                 .map_err(|e| anyhow::anyhow!(
-                    "{e}\nHint: a window named '{window_name}' may already exist — run 'am clean {slug}' first"
+                    "{e}\nHint: a window named '{window_name}' may already exist — run 'am destroy {slug}' first"
                 ))?;
         } else {
             tmux::create_window(&window_name, &worktree_path)
                 .map_err(|e| anyhow::anyhow!(
-                    "{e}\nHint: a window named '{window_name}' may already exist — run 'am clean {slug}' first"
+                    "{e}\nHint: a window named '{window_name}' may already exist — run 'am destroy {slug}' first"
                 ))?;
             // No container — launch agent directly in the pane if specified
             if let Some(ref agent) = effective_agent {
@@ -284,7 +284,7 @@ fn cmd_attach(slug: &str) -> anyhow::Result<()> {
         )?;
         tmux::create_window(&window_name, &s.worktree_path)
             .map_err(|e| anyhow::anyhow!(
-                "{e}\nHint: a window named '{window_name}' may already exist — run 'am clean {slug}' first"
+                "{e}\nHint: a window named '{window_name}' may already exist — run 'am destroy {slug}' first"
             ))?;
         tmux::split_window(&window_name, &s.worktree_path, &cfg.tmux.split)?;
         tmux::select_pane(&tmux::get_pane_id(&window_name, 0))?;
@@ -315,9 +315,9 @@ fn cmd_run(slug: &str, agent: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-// ── am clean ─────────────────────────────────────────────────────────────────
+// ── am destroy ───────────────────────────────────────────────────────────────
 
-fn cmd_clean(slug: &str, force: bool) -> anyhow::Result<()> {
+fn cmd_destroy(slug: &str, force: bool) -> anyhow::Result<()> {
     let repo_root = find_repo_root()?;
     let sessions = session::load_sessions(&repo_root)?;
 
@@ -366,7 +366,7 @@ fn cmd_clean(slug: &str, force: bool) -> anyhow::Result<()> {
     // Remove session record
     session::remove_session(&repo_root, slug)?;
 
-    println!("Cleaned session '{slug}'.");
+    println!("Destroyed session '{slug}'.");
     Ok(())
 }
 

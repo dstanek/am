@@ -139,7 +139,7 @@ gh copilot --version
 Re-authenticate on the host if needed (`gh auth login`), then restart the session:
 
 ```sh
-am clean feat --force
+am destroy feat --force
 am start feat --agent copilot
 ```
 

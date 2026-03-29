@@ -1,13 +1,13 @@
 Feature: full session lifecycle
 
-  Scenario: start then list then clean
+  Scenario: start then list then destroy
     Given a git repository
     When I run "am start my-feature"
     Then the command succeeds
     When I run "am list"
     Then the command succeeds
     And the output contains "my-feature"
-    When I run "am clean --force my-feature"
+    When I run "am destroy --force my-feature"
     Then the command succeeds
     When I run "am list"
     Then the command succeeds

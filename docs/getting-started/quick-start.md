@@ -135,21 +135,21 @@ am attach bugfix
 
 ---
 
-## Step 6: Clean up
+## Step 6: Destroy the session
 
-When you are done with a session, clean it up:
+When you are done with a session, destroy it:
 
 ```sh
-am clean feat
+am destroy feat
 ```
 
 `am` will ask for confirmation before proceeding. To skip the prompt (useful in scripts or when you're confident):
 
 ```sh
-am clean feat --force
+am destroy feat --force
 ```
 
-The clean command:
+The destroy command:
 
 1. Stops and removes the container
 2. Kills the tmux window

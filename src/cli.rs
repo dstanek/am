@@ -54,8 +54,8 @@ pub enum Commands {
         agent: String,
     },
 
-    /// Remove worktree, kill tmux window, clean up session
-    Clean {
+    /// Destroy a session: remove worktree, kill tmux window, stop container
+    Destroy {
         #[arg(value_parser = validate_slug)]
         slug: String,
         /// Skip confirmation prompt

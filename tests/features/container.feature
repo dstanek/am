@@ -18,9 +18,9 @@ Feature: container integration — session isolation with a container runtime
     And the session file contains "my-feature"
     And the session file does not contain "podman"
 
-  Scenario: clean stops and removes the container
+  Scenario: destroy stops and removes the container
     Given a session "my-feature" has been started
-    When I run "am clean --force my-feature"
+    When I run "am destroy --force my-feature"
     Then the command succeeds
     And the mock podman log contains "stop"
     And the mock podman log contains "rm"

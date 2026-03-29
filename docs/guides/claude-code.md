@@ -122,7 +122,7 @@ am start feat --agent claude
 If you see an authentication error when the container starts, run `claude auth login` on your host machine first, then restart the session:
 
 ```sh
-am clean feat --force
+am destroy feat --force
 am start feat --agent claude
 ```
 

@@ -135,14 +135,14 @@ am run feat claude
 
 ---
 
-## `am clean <slug>`
+## `am destroy <slug>`
 
-Stop and remove an agent session.
+Destroy an agent session.
 
 **Usage**
 
 ```sh
-am clean <slug> [OPTIONS]
+am destroy <slug> [OPTIONS]
 ```
 
 **Options**
@@ -159,7 +159,7 @@ am clean <slug> [OPTIONS]
 4. Removes the git worktree at `.am/worktrees/<slug>` and deletes the `am/<slug>` branch
 5. Removes the session record from `.am/sessions.json`
 
-Without `--force`, `am` prints a summary of what will be removed and asks for confirmation. This is the only destructive command in `am` and cannot be undone — the worktree and branch are permanently deleted.
+Without `--force`, `am` prints a summary of what will be destroyed and asks for confirmation. This is the only destructive command in `am` and cannot be undone — the worktree and branch are permanently deleted.
 
 ---
 
