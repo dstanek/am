@@ -14,7 +14,7 @@ fn validate_slug(s: &str) -> Result<String, String> {
 }
 
 #[derive(Parser)]
-#[command(name = "am", about = "Agent Manager — isolated agent sessions")]
+#[command(name = "am", about = "Agent Manager — isolated agent sessions", version)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
