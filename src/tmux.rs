@@ -28,6 +28,24 @@ fn run_tmux(args: &[&str]) -> Result<()> {
     Ok(())
 }
 
+fn run_tmux_output(args: &[&str]) -> Result<String> {
+    let output = std::process::Command::new(tmux_bin())
+        .args(args)
+        .output()
+        .map_err(|e| AmError::TmuxError(format!("failed to run tmux: {e}")))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(AmError::TmuxError(if stderr.is_empty() {
+            format!("tmux exited with status {}", output.status)
+        } else {
+            stderr
+        })
+        .into());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
 /// Returns `true` if the `$TMUX` environment variable is set (i.e. we are
 /// running inside a tmux session).
 pub fn is_in_tmux() -> bool {
@@ -96,6 +114,27 @@ pub fn send_keys(pane_target: &str, keys: &str) -> Result<()> {
 /// `tmux kill-window -t <window_name>`
 pub fn kill_window(window_name: &str) -> Result<()> {
     run_tmux(&["kill-window", "-t", window_name])
+}
+
+/// `tmux kill-pane -t <target>`
+pub fn kill_pane(target: &str) -> Result<()> {
+    run_tmux(&["kill-pane", "-t", target])
+}
+
+/// Returns the name of the current tmux window.
+/// `tmux display-message -p '#W'`
+pub fn current_window_name() -> Result<String> {
+    run_tmux_output(&["display-message", "-p", "#W"])
+}
+
+/// Rename a tmux window.
+/// If `target` is `None`, renames the current window.
+/// `tmux rename-window [-t <target>] <new_name>`
+pub fn rename_window(target: Option<&str>, new_name: &str) -> Result<()> {
+    match target {
+        Some(t) => run_tmux(&["rename-window", "-t", t, new_name]),
+        None => run_tmux(&["rename-window", new_name]),
+    }
 }
 
 /// Returns the pane target string `"<window_name>.<index>"`.
@@ -256,5 +295,45 @@ mod tests {
         let out = mock.captured();
         assert!(out.contains("kill-window"));
         assert!(out.contains("am-feat"));
+    }
+
+    #[test]
+    fn kill_pane_sends_correct_command() {
+        let mock = MockTmux::new();
+        kill_pane("am-feat.1").unwrap();
+        let out = mock.captured();
+        assert!(out.contains("kill-pane"));
+        assert!(out.contains("am-feat.1"));
+    }
+
+    #[test]
+    fn current_window_name_sends_display_message() {
+        let mock = MockTmux::new();
+        // mock tmux doesn't emit stdout, so we just verify the right command is issued
+        let _ = current_window_name();
+        let out = mock.captured();
+        assert!(out.contains("display-message"));
+        assert!(out.contains("#W"));
+    }
+
+    #[test]
+    fn rename_window_without_target_omits_t_flag() {
+        let mock = MockTmux::new();
+        rename_window(None, "new-name").unwrap();
+        let out = mock.captured();
+        assert!(out.contains("rename-window"));
+        assert!(out.contains("new-name"));
+        assert!(!out.contains("-t"));
+    }
+
+    #[test]
+    fn rename_window_with_target_passes_t_flag() {
+        let mock = MockTmux::new();
+        rename_window(Some("am-feat"), "old-name").unwrap();
+        let out = mock.captured();
+        assert!(out.contains("rename-window"));
+        assert!(out.contains("-t"));
+        assert!(out.contains("am-feat"));
+        assert!(out.contains("old-name"));
     }
 }

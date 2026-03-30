@@ -167,23 +167,23 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
     };
     let window_name = format!("am-{slug}");
 
-    if tmux::is_in_tmux() {
-        tmux::create_window(&window_name, &worktree_path)
+    let original_window_name = if tmux::is_in_tmux() {
+        // Capture the current window name before we rename it.
+        let orig = tmux::current_window_name().ok().filter(|s| !s.is_empty());
+        tmux::rename_window(None, &window_name)
             .map_err(|e| anyhow::anyhow!(
                 "{e}\nHint: a window named '{window_name}' may already exist — run 'am destroy {slug}' first"
             ))?;
-        if let Some(ref cmd) = container_cmd {
-            // Send the container command as keystrokes so it appears in the pane.
-            tmux::send_keys(&tmux::get_pane_id(&window_name, 0), &cmd.join(" "))?;
-        } else {
-            // No container — launch agent directly in the pane if specified
-            if let Some(ref agent) = effective_agent {
-                tmux::send_keys(&tmux::get_pane_id(&window_name, 0), agent)?;
-            }
-        }
+        // Split the current window; the new pane (index 1) becomes the agent pane.
         tmux::split_window(&window_name, &worktree_path, &cfg.tmux.split)?;
+        if let Some(ref cmd) = container_cmd {
+            tmux::send_keys(&tmux::get_pane_id(&window_name, 1), &cmd.join(" "))?;
+        } else if let Some(ref agent) = effective_agent {
+            tmux::send_keys(&tmux::get_pane_id(&window_name, 1), agent)?;
+        }
+        // Keep focus on the shell pane (pane 0 — the original pane the user was in).
         tmux::select_pane(&tmux::get_pane_id(&window_name, 0))?;
-        tmux::select_window(&window_name)?;
+        orig
     } else if let Some(ref cmd) = container_cmd {
         // Not in tmux — run the container directly, replacing this process
         #[cfg(unix)]
@@ -205,18 +205,20 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
         }
     } else {
         println!("Note: not inside tmux — no window opened. Run 'am attach {slug}' from inside tmux to open one.");
-    }
+        None
+    };
 
     let new_session = session::Session {
         slug: slug.to_string(),
         branch: format!("am/{slug}"),
         worktree_path: worktree_path.clone(),
         tmux_window: window_name,
-        agent_pane: format!("am-{slug}.0"),
-        shell_pane: format!("am-{slug}.1"),
+        agent_pane: format!("am-{slug}.1"),
+        shell_pane: format!("am-{slug}.0"),
         created_at: chrono::Utc::now(),
         container: session_container,
         auto,
+        original_window_name,
     };
     session::add_session(&repo_root, new_session)?;
 
@@ -365,8 +367,19 @@ fn cmd_destroy(slug: &str, force: bool) -> anyhow::Result<()> {
         }
     }
 
-    // Kill tmux window (ignore error — window may not exist)
-    let _ = tmux::kill_window(&format!("am-{slug}"));
+    // Clean up the tmux window (ignore errors — window/pane may not exist)
+    if let Some(s) = session::find_session(&sessions, slug) {
+        if s.original_window_name.is_some() {
+            // New-style session: kill only the agent pane, then restore the window name.
+            let _ = tmux::kill_pane(&s.agent_pane);
+            if let Some(ref orig) = s.original_window_name {
+                let _ = tmux::rename_window(Some(&s.tmux_window), orig);
+            }
+        } else {
+            // Old-style session: the window was dedicated, kill it entirely.
+            let _ = tmux::kill_window(&s.tmux_window);
+        }
+    }
 
     // Remove worktree — warn but continue if it's already gone
     let vcs = worktree::detect_vcs(&repo_root).unwrap_or(config::Vcs::Git);

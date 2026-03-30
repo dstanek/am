@@ -25,6 +25,10 @@ pub struct Session {
     pub container: Option<SessionContainer>,
     #[serde(default)]
     pub auto: bool,
+    /// The window name before `am start` renamed it (new-style sessions only).
+    /// `None` for old-style sessions that owned a dedicated window.
+    #[serde(default)]
+    pub original_window_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -95,11 +99,12 @@ mod tests {
             branch: format!("am/{slug}"),
             worktree_path: PathBuf::from(format!(".am/worktrees/{slug}")),
             tmux_window: format!("am-{slug}"),
-            agent_pane: format!("am-{slug}.0"),
-            shell_pane: format!("am-{slug}.1"),
+            agent_pane: format!("am-{slug}.1"),
+            shell_pane: format!("am-{slug}.0"),
             created_at: Utc::now(),
             container: None,
             auto: false,
+            original_window_name: None,
         }
     }
 
