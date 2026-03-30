@@ -48,6 +48,7 @@ pub fn create_window(window_name: &str, working_dir: &Path) -> Result<()> {
 /// Like `create_window`, but runs `shell_cmd` directly as the pane command
 /// (`tmux new-window ... <shell_cmd>`). The command is passed to the default
 /// shell via `-c`; it is never echoed into the pane as keystrokes.
+#[allow(dead_code)]
 pub fn create_window_with_shell_cmd(window_name: &str, working_dir: &Path, shell_cmd: &str) -> Result<()> {
     run_tmux(&[
         "new-window",

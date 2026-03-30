@@ -10,6 +10,7 @@
 cargo build              # Debug build
 cargo build --release    # Release build
 cargo test               # Run all tests (run after every change)
+cargo clippy -- -D warnings  # Lint (run after every change)
 cargo run -- <command>   # Run (e.g., cargo run -- start my-feature)
 make build-claude        # Build Claude Code Docker image
 make build-copilot       # Build Copilot Docker image
@@ -39,7 +40,7 @@ make build-copilot       # Build Copilot Docker image
 - Mock tmux via `AM_TMUX_BIN`; mock container runtimes via `AM_PODMAN_BIN`/`AM_DOCKER_BIN`
 - Tests mutating env vars use a mutex to serialize execution
 
-**After every code change:** run `cargo test`. Fix any failures before proceeding.
+**After every code change:** run `cargo test` and `cargo clippy -- -D warnings`. Fix any failures before proceeding.
 
 ## Version Control
 
