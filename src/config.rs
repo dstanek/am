@@ -386,6 +386,8 @@ mod tests {
 
     #[test]
     fn defaults_when_no_config_files() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe { std::env::remove_var("AM_AGENT"); }
         let tmp = TempDir::new().unwrap();
         let nonexistent_global = tmp.path().join("global.toml");
         let nonexistent_project = tmp.path().join("project.toml");
@@ -402,6 +404,8 @@ mod tests {
 
     #[test]
     fn project_config_overrides_global() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe { std::env::remove_var("AM_AGENT"); }
         let tmp = TempDir::new().unwrap();
 
         let global_path = write_toml(tmp.path(), "global.toml", r#"
@@ -426,6 +430,8 @@ image = "project-image"
 
     #[test]
     fn project_config_inherits_unset_global_fields() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe { std::env::remove_var("AM_AGENT"); }
         let tmp = TempDir::new().unwrap();
 
         let global_path = write_toml(tmp.path(), "global.toml", r#"
