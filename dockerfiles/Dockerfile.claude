@@ -26,13 +26,6 @@ apt-get update && apt-get install -y \
     ssh
 ln -s /usr/bin/fdfind /usr/local/bin/fd
 
-# Install Node.js LTS via NodeSource
-curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
-apt-get install -y nodejs
-
-# Install Claude Code
-npm install -g @anthropic-ai/claude-code
-
 # Install jj (Jujutsu VCS)
 JJ_VERSION=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/jj-vcs/jj/releases/latest | sed 's|.*/tag/||' | tr -d '[:space:]')
 JJ_ARCH=$(uname -m)
@@ -50,6 +43,12 @@ RUN userdel -r ubuntu 2>/dev/null || true \
 
 USER am
 ENV HOME=/home/am
+
+# Install Claude Code via native installer (no Node.js/npm required)
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
+ENV PATH="/home/am/.local/bin:${PATH}"
+ENV DISABLE_AUTOUPDATER=1
 
 # ~/.claude will be mounted by `am` at runtime — no credentials baked in
 WORKDIR /workspace
