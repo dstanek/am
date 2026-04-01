@@ -8,7 +8,7 @@
 #   podman build --build-arg BASE_IMAGE=ghcr.io/dstanek/am-copilot:latest \
 #       -f examples/Dockerfile.rust -t my-project:latest .
 
-ARG BASE_IMAGE=ghcr.io/dstanek/am-claude:latest
+ARG BASE_IMAGE=ghcr.io/dstanek/am-claude-minimal:latest
 FROM ${BASE_IMAGE}
 
 USER root

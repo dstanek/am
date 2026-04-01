@@ -81,7 +81,7 @@ impl Default for ContainerConfig {
         Self {
             enabled: true,
             runtime: RuntimePreference::Auto,
-            image: Some("ubuntu:25.10".to_string()),
+            image: Some("ghcr.io/dstanek/am-claude-minimal:latest".to_string()),
             agent: None,
             network: NetworkMode::Full,
             env: Vec::new(),
@@ -233,7 +233,7 @@ pub fn write_defaults(path: &Path) -> Result<()> {
 [container]
 # enabled = true
 # runtime = "auto"       # "auto" | "podman" | "docker"
-# image = "ubuntu:25.10" # container image to run
+# image = "ghcr.io/dstanek/am-claude-minimal:latest" # container image to run
 # agent = ""             # agent for this project's containers (overrides defaults.agent)
 # network = "full"       # "full" | "none"
 # env = []               # extra environment variables to pass into the container
@@ -268,7 +268,7 @@ split_percent = 50     # percentage of the window given to the agent pane (1-99)
 [container]
 enabled = true
 runtime = "auto"       # "auto" (podman first, then docker) | "podman" | "docker"
-image = "ubuntu:25.10" # container image; must be set when container.enabled = true
+image = "ghcr.io/dstanek/am-claude-minimal:latest" # container image; must be set when container.enabled = true
 agent = ""             # agent for containers (overrides defaults.agent in container context)
 network = "full"       # "full" (unrestricted) | "none" (no network access)
 env = []               # extra environment variables passed into the container, e.g. ["FOO=bar"]
@@ -399,7 +399,7 @@ mod tests {
         assert_eq!(config.tmux.split_percent, 50);
         assert!(config.container.enabled);
         assert_eq!(config.container.runtime, RuntimePreference::Auto);
-        assert_eq!(config.container.image.as_deref(), Some("ubuntu:25.10"));
+        assert_eq!(config.container.image.as_deref(), Some("ghcr.io/dstanek/am-claude-minimal:latest"));
     }
 
     #[test]

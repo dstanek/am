@@ -12,8 +12,8 @@ This project publishes two tiers of images for each agent:
 
 | Image | Contents | Best for |
 |---|---|---|
-| `am-claude` / `am-copilot` | Agent + git + jj + ripgrep + fd + jq + neovim + build tools | Quickly trying `am` without any setup |
-| `am-claude-minimal` / `am-copilot-minimal` | Agent + git only | Base for project-specific images; smaller download |
+| `ghcr.io/dstanek/am-claude` / `ghcr.io/dstanek/am-copilot` | Agent + git + jj + ripgrep + fd + jq + neovim + build tools | Quickly trying `am` without any setup |
+| `ghcr.io/dstanek/am-claude-minimal` / `ghcr.io/dstanek/am-copilot-minimal` | Agent + git only | Base for project-specific images; smaller download |
 
 The full images are convenient for exploration. For real projects, start from a minimal image and add only what your project needs.
 

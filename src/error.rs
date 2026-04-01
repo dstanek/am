@@ -26,7 +26,7 @@ pub enum AmError {
     #[error("requested container runtime '{0}' not found — install it or change .am/config.toml (container.runtime)")]
     RequestedContainerRuntimeNotFound(String),
 
-    #[error("container.image is not configured — set `container.image` in .am/config.toml or ~/.config/am/config.toml (e.g., image = \"ubuntu:25.10\")")]
+    #[error("container.image is not configured — set `container.image` in .am/config.toml or ~/.config/am/config.toml (e.g., image = \"ghcr.io/dstanek/am-claude-minimal:latest\")")]
     ContainerImageNotConfigured,
 
 
