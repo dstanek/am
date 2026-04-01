@@ -130,7 +130,14 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
         // Pre-emptively remove any leftover container from a previous run
         container::remove_if_exists(&runtime, &format!("am-{slug}"));
 
-        let mounts = container::resolve_mounts(slug, &repo_root, &vcs, effective_agent.as_deref())?;
+        let mounts = container::resolve_mounts(
+            slug,
+            &repo_root,
+            &vcs,
+            effective_agent.as_deref(),
+            cfg.container.gitconfig.as_deref(),
+            cfg.container.ssh.as_deref(),
+        )?;
 
         let extra_env: Vec<(&str, &str)> = vec![];
         let mut cmd = container::build_run_command(

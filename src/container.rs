@@ -117,6 +117,8 @@ pub fn resolve_mounts(
     repo_root: &Path,
     vcs: &Vcs,
     agent: Option<&str>,
+    gitconfig: Option<&Path>,
+    ssh: Option<&Path>,
 ) -> Result<ContainerMounts> {
     let home = home_dir()?;
     let worktree_host = repo_root.join(".am").join("worktrees").join(slug);
@@ -136,8 +138,12 @@ pub fn resolve_mounts(
     } else {
         None
     };
-    let gitconfig_host = home.join(".gitconfig");
-    let ssh_host = home.join(".ssh");
+    let gitconfig_host = gitconfig
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| home.join(".gitconfig"));
+    let ssh_host = ssh
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| home.join(".ssh"));
     let agent_auth = agent.map(resolve_agent_auth_mount).unwrap_or_default();
 
     Ok(ContainerMounts {
@@ -569,7 +575,7 @@ mod tests {
         std::env::set_var("HOME", tmp.path());
 
         let repo_root = tmp.path().join("repo");
-        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Git, None).unwrap();
+        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Git, None, None, None).unwrap();
 
         assert_eq!(mounts.worktree_host, repo_root.join(".am/worktrees/feat"));
         assert_eq!(mounts.vcs_host, repo_root.join(".git"));
@@ -588,7 +594,7 @@ mod tests {
 
         let repo_root = tmp.path().join("repo");
         std::fs::create_dir_all(repo_root.join(".git")).unwrap();
-        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Jj, None).unwrap();
+        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Jj, None, None, None).unwrap();
 
         assert_eq!(mounts.colocated_git_host, Some(repo_root.join(".git")));
 
@@ -602,7 +608,7 @@ mod tests {
         std::env::set_var("HOME", tmp.path());
 
         let repo_root = tmp.path().join("repo");
-        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Jj, None).unwrap();
+        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Jj, None, None, None).unwrap();
 
         assert_eq!(mounts.colocated_git_host, None);
 
@@ -640,7 +646,7 @@ mod tests {
         std::env::set_var("HOME", tmp.path());
         std::env::remove_var("CLAUDE_CONFIG_DIR");
 
-        let mounts = resolve_mounts("feat", tmp.path(), &Vcs::Git, Some("claude")).unwrap();
+        let mounts = resolve_mounts("feat", tmp.path(), &Vcs::Git, Some("claude"), None, None).unwrap();
         assert_eq!(mounts.agent_auth.len(), 2);
         assert_eq!(mounts.agent_auth[0].host_path, tmp.path().join(".claude"));
         assert_eq!(

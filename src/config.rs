@@ -74,6 +74,8 @@ pub struct ContainerConfig {
     pub network: NetworkMode,
     pub env: Vec<String>,
     pub startup_delay_ms: u64,
+    pub gitconfig: Option<PathBuf>, // None = ~/.gitconfig
+    pub ssh: Option<PathBuf>,       // None = ~/.ssh
 }
 
 impl Default for ContainerConfig {
@@ -86,6 +88,8 @@ impl Default for ContainerConfig {
             network: NetworkMode::Full,
             env: Vec::new(),
             startup_delay_ms: 500,
+            gitconfig: None,
+            ssh: None,
         }
     }
 }
@@ -133,6 +137,8 @@ struct FileContainer {
     network: Option<NetworkMode>,
     env: Option<Vec<String>>,
     startup_delay_ms: Option<u64>,
+    gitconfig: Option<PathBuf>,
+    ssh: Option<PathBuf>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -188,6 +194,12 @@ fn apply_file_config(base: &mut Config, file: FileConfig) {
     if let Some(v) = file.container.startup_delay_ms {
         base.container.startup_delay_ms = v;
     }
+    if let Some(v) = file.container.gitconfig {
+        base.container.gitconfig = Some(v);
+    }
+    if let Some(v) = file.container.ssh {
+        base.container.ssh = Some(v);
+    }
 }
 
 fn parse_config_file(path: &Path) -> Result<FileConfig> {
@@ -238,6 +250,8 @@ pub fn write_defaults(path: &Path) -> Result<()> {
 # network = "full"       # "full" | "none"
 # env = []               # extra environment variables to pass into the container
 # startup_delay_ms = 500 # ms to wait after container start before sending the agent command
+# gitconfig = ""        # path to gitconfig to mount (default: ~/.gitconfig)
+# ssh = ""              # path to SSH dir to mount (default: ~/.ssh)
 "#;
     std::fs::write(path, content)?;
     Ok(())
@@ -273,6 +287,8 @@ agent = ""             # agent for containers (overrides defaults.agent in conta
 network = "full"       # "full" (unrestricted) | "none" (no network access)
 env = []               # extra environment variables passed into the container, e.g. ["FOO=bar"]
 startup_delay_ms = 500 # ms to wait after container start before sending the agent command
+# gitconfig = ""        # path to gitconfig to mount (default: ~/.gitconfig)
+# ssh = ""              # path to SSH dir to mount (default: ~/.ssh)
 "#
 }
 
@@ -344,6 +360,16 @@ fn apply_env_vars(config: &mut Config) {
     if let Ok(val) = std::env::var("AM_CONTAINER_STARTUP_DELAY_MS") {
         if let Ok(n) = val.parse::<u64>() {
             config.container.startup_delay_ms = n;
+        }
+    }
+    if let Ok(val) = std::env::var("AM_CONTAINER_GITCONFIG") {
+        if !val.is_empty() {
+            config.container.gitconfig = Some(PathBuf::from(val));
+        }
+    }
+    if let Ok(val) = std::env::var("AM_CONTAINER_SSH") {
+        if !val.is_empty() {
+            config.container.ssh = Some(PathBuf::from(val));
         }
     }
 }
