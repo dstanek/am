@@ -1,0 +1,35 @@
+# Python development environment — agent-agnostic.
+#
+# Build with any am agent image as the base:
+#
+#   podman build --build-arg BASE_IMAGE=ghcr.io/dstanek/am-claude:latest \
+#       -f examples/Dockerfile.python -t my-project:latest .
+#
+#   podman build --build-arg BASE_IMAGE=ghcr.io/dstanek/am-copilot:latest \
+#       -f examples/Dockerfile.python -t my-project:latest .
+#
+# The minimal images are smaller and faster to pull:
+#
+#   podman build --build-arg BASE_IMAGE=ghcr.io/dstanek/am-claude-minimal:latest \
+#       -f examples/Dockerfile.python -t my-project:latest .
+
+ARG BASE_IMAGE=ghcr.io/dstanek/am-claude:latest
+FROM ${BASE_IMAGE}
+
+USER root
+
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+ && rm -rf /var/lib/apt/lists/*
+
+# Pre-install project dependencies.
+# Copy only the manifest so this layer is invalidated only when dependencies change,
+# not on every source code edit.
+#
+# COPY --chown=am:am requirements.txt /tmp/requirements.txt
+# RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+USER am
+WORKDIR /workspace

@@ -1,0 +1,47 @@
+# Terraform / OpenTofu development environment — agent-agnostic.
+#
+# Build with any am agent image as the base:
+#
+#   podman build --build-arg BASE_IMAGE=ghcr.io/dstanek/am-claude:latest \
+#       -f examples/Dockerfile.terraform -t my-project:latest .
+#
+#   podman build --build-arg BASE_IMAGE=ghcr.io/dstanek/am-copilot:latest \
+#       -f examples/Dockerfile.terraform -t my-project:latest .
+#
+# By default this installs OpenTofu (open-source Terraform fork).
+# To install HashiCorp Terraform instead, see the commented block below.
+
+ARG BASE_IMAGE=ghcr.io/dstanek/am-claude:latest
+FROM ${BASE_IMAGE}
+
+USER root
+
+# Install OpenTofu
+RUN <<EOF
+set -e
+apt-get update && apt-get install -y gnupg
+
+curl -fsSL https://get.opentofu.org/opentofu.gpg \
+    | gpg --dearmor -o /usr/share/keyrings/opentofu-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/opentofu-archive-keyring.gpg] https://packages.opentofu.org/opentofu/tofu/any/ any main" \
+    > /etc/apt/sources.list.d/opentofu.list
+apt-get update && apt-get install -y tofu
+
+rm -rf /var/lib/apt/lists/*
+EOF
+
+# To install HashiCorp Terraform instead, replace the block above with:
+#
+# RUN <<EOF
+# set -e
+# apt-get update && apt-get install -y gnupg software-properties-common
+# curl -fsSL https://apt.releases.hashicorp.com/gpg \
+#     | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+# echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(. /etc/os-release && echo $VERSION_CODENAME) main" \
+#     > /etc/apt/sources.list.d/hashicorp.list
+# apt-get update && apt-get install -y terraform
+# rm -rf /var/lib/apt/lists/*
+# EOF
+
+USER am
+WORKDIR /workspace

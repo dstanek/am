@@ -29,8 +29,12 @@ jobs:
         include:
           - image: am-claude
             dockerfile: dockerfiles/Dockerfile.claude
+          - image: am-claude-minimal
+            dockerfile: dockerfiles/Dockerfile.claude-minimal
           - image: am-copilot
             dockerfile: dockerfiles/Dockerfile.copilot
+          - image: am-copilot-minimal
+            dockerfile: dockerfiles/Dockerfile.copilot-minimal
 
     steps:
       - uses: actions/checkout@v4

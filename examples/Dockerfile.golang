@@ -1,0 +1,32 @@
+# Go development environment — agent-agnostic.
+#
+# Build with any am agent image as the base:
+#
+#   podman build --build-arg BASE_IMAGE=ghcr.io/dstanek/am-claude:latest \
+#       -f examples/Dockerfile.golang -t my-project:latest .
+#
+#   podman build --build-arg BASE_IMAGE=ghcr.io/dstanek/am-copilot:latest \
+#       -f examples/Dockerfile.golang -t my-project:latest .
+
+ARG BASE_IMAGE=ghcr.io/dstanek/am-claude:latest
+FROM ${BASE_IMAGE}
+
+USER root
+
+# Check https://go.dev/dl/ for the latest stable version.
+ARG GO_VERSION=1.24.2
+RUN ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') \
+ && curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" \
+    | tar -xz -C /usr/local
+
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+# Pre-fetch Go module dependencies.
+# Copy only the module files so this layer is invalidated only when dependencies change,
+# not on every source code edit.
+#
+# COPY --chown=am:am go.mod go.sum /workspace/
+# RUN cd /workspace && go mod download
+
+USER am
+WORKDIR /workspace

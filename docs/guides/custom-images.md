@@ -2,6 +2,21 @@
 
 `am` works with any container image — the images published by this project are a convenient starting point, not a requirement. A **custom image** lets you bake in exactly the tools your project needs so every agent session starts in a fully-prepared environment without any extra setup.
 
+For most real projects, building a project-specific image is the recommended approach. It gives you full control over the environment, speeds up agent sessions by pre-caching dependencies, and makes the setup reproducible across machines.
+
+---
+
+## Choosing a starting point
+
+This project publishes two tiers of images for each agent:
+
+| Image | Contents | Best for |
+|---|---|---|
+| `am-claude` / `am-copilot` | Agent + git + jj + ripgrep + fd + jq + neovim + build tools | Quickly trying `am` without any setup |
+| `am-claude-minimal` / `am-copilot-minimal` | Agent + git only | Base for project-specific images; smaller download |
+
+The full images are convenient for exploration. For real projects, start from a minimal image and add only what your project needs.
+
 ---
 
 ## When to use a custom image
@@ -37,34 +52,62 @@ For unknown agent names (a raw command string), whatever binary you pass must ex
 
 The simplest approach is to layer your project's tooling on top of an existing `am` image. The base image already has the agent installed; you just add what your project needs.
 
-The `am` project itself does this — `dockerfiles/Dockerfile.am-dev` is used to develop and test `am` inside a Claude Code container:
+### Agent-agnostic examples
+
+The `examples/` directory contains ready-to-use Dockerfiles for common project types. Each one accepts a `BASE_IMAGE` build argument so you can use it with any agent without maintaining separate files per agent:
+
+```sh
+# Claude
+podman build --build-arg BASE_IMAGE=ghcr.io/dstanek/am-claude-minimal:latest \
+    -f examples/Dockerfile.python -t my-project:latest .
+
+# Copilot — same Dockerfile, different base
+podman build --build-arg BASE_IMAGE=ghcr.io/dstanek/am-copilot-minimal:latest \
+    -f examples/Dockerfile.python -t my-project:latest .
+```
+
+Available examples:
+
+| File | Language / toolchain |
+|---|---|
+| `examples/Dockerfile.python` | Python 3 + pip + venv |
+| `examples/Dockerfile.rust` | Rust via rustup |
+| `examples/Dockerfile.golang` | Go via official tarball |
+| `examples/Dockerfile.terraform` | OpenTofu (or Terraform) |
+| `examples/Dockerfile.terragrunt` | Terragrunt + OpenTofu (or Terraform) |
+
+Each example also includes a commented-out dependency pre-caching block. Uncomment and adapt it to your project's manifest files so that the cached layer survives source-code rebuilds.
+
+### The pattern
+
+Using `ARG BASE_IMAGE` in your own Dockerfile keeps it agent-agnostic:
 
 ```dockerfile
-FROM am-claude:latest
+ARG BASE_IMAGE=ghcr.io/dstanek/am-claude-minimal:latest
+FROM ${BASE_IMAGE}
 
-# Build tools needed for git2's vendored libgit2 + openssl
-RUN <<EOF
-set -e
-apt-get update && apt-get install -y \
-    cmake \
-    perl \
-    pkg-config \
-    libssl-dev
-rm -rf /var/lib/apt/lists/*
-EOF
+USER root
+RUN apt-get update && apt-get install -y your-tools \
+ && rm -rf /var/lib/apt/lists/*
 
-# Install Rust via rustup
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --default-toolchain stable --profile minimal
-ENV PATH="/root/.cargo/bin:${PATH}"
+USER am
+WORKDIR /workspace
+```
 
-# Configure git identity — required by tests that run `git commit`
+### Developing `am` itself
+
+The `am` project uses `dockerfiles/Dockerfile.am-dev` to develop and test `am` inside a Claude Code container. It extends `am-rust:latest` (the Rust example image built from `examples/Dockerfile.rust`) and only adds the project-specific configuration on top:
+
+```dockerfile
+FROM am-rust:latest
+
+# Configure git identity — required by `am` tests that run `git commit`
 RUN git config --global user.email "dev@example.com" \
  && git config --global user.name "Dev"
 
-# Pre-fetch dependencies so incremental builds are fast
+# Pre-fetch Cargo dependencies so incremental builds are fast.
 WORKDIR /workspace
-COPY Cargo.toml Cargo.lock ./
+COPY --chown=am:am Cargo.toml Cargo.lock ./
 RUN mkdir -p src tests \
  && echo 'fn main() {}' > src/main.rs \
  && echo 'fn main() {}' > tests/cucumber.rs \
@@ -72,20 +115,10 @@ RUN mkdir -p src tests \
  && rm -rf src tests
 ```
 
-A few patterns worth noting:
-
-- **Layer on top of the agent image** — you get jj, git, and Claude Code for free.
-- **Pre-fetch dependencies** — copy only the manifest files and run your package manager's fetch/download step. The source tree is mounted at runtime, so the cached layers survive rebuilds.
-- **Set any globals that tests need** — here, `git config --global` provides the commit identity that `cargo test` requires.
-
 Build it with:
 
 ```sh
-make build-am-dev   # uses Podman or Docker automatically
-
-# or directly:
-podman build -f dockerfiles/Dockerfile.am-dev -t am-dev:latest .
-docker build -f dockerfiles/Dockerfile.am-dev -t am-dev:latest .
+make build-am-dev   # also builds am-rust:latest as a dependency
 ```
 
 ---
@@ -101,15 +134,21 @@ FROM python:3.12-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y \
-    curl gnupg git ripgrep \
- && curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
- && apt-get install -y nodejs \
- && npm install -g @anthropic-ai/claude-code \
+RUN apt-get update && apt-get install -y curl git \
  && rm -rf /var/lib/apt/lists/*
 
+RUN useradd -m -u 1000 -s /bin/bash am \
+ && mkdir -p /workspace && chown am:am /workspace
+
+USER am
+ENV HOME=/home/am
+
+RUN curl -fsSL https://claude.ai/install.sh | bash
+ENV PATH="/home/am/.local/bin:${PATH}"
+ENV DISABLE_AUTOUPDATER=1
+
 # Install project dependencies
-COPY requirements.txt /tmp/requirements.txt
+COPY --chown=am:am requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 WORKDIR /workspace
@@ -117,7 +156,7 @@ WORKDIR /workspace
 
 The key steps are:
 1. Start from whatever base image suits your project.
-2. Install the agent binary (here, `@anthropic-ai/claude-code` via npm).
+2. Create the `am` user and install the agent binary.
 3. Pre-install project dependencies against a static manifest file (not the live source tree, which is mounted at runtime).
 
 ---

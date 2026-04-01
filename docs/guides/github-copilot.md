@@ -38,7 +38,12 @@ podman pull ghcr.io/dstanek/am-copilot:latest
 
 ### Build from source
 
-If you need to add project-specific tools, the `dockerfiles/Dockerfile.copilot` file in this repository installs the GitHub CLI and the Copilot CLI package:
+If you need to add project-specific tools, the Dockerfiles in this repository are a good starting point:
+
+- `dockerfiles/Dockerfile.copilot` — full image with git, jj, ripgrep, jq, neovim, and common dev tools
+- `dockerfiles/Dockerfile.copilot-minimal` — minimal image with only git, the GitHub CLI, and the Copilot binary; use this as a base for project-specific images
+
+The minimal image:
 
 ```dockerfile
 FROM ubuntu:25.10
@@ -47,11 +52,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN <<EOF
 set -e
-
-apt-get update && apt-get install -y \
-    ca-certificates curl wget gnupg git build-essential \
-    python3 python3-pip python3-venv ripgrep fd-find jq unzip less neovim ssh
-ln -s /usr/bin/fdfind /usr/local/bin/fd
+apt-get update && apt-get install -y ca-certificates curl git
 
 curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
@@ -62,16 +63,17 @@ apt-get update && apt-get install -y gh
 
 curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
 apt-get install -y nodejs
-
 npm install -g @github/copilot
-
-JJ_VERSION=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/jj-vcs/jj/releases/latest | sed 's|.*/tag/||' | tr -d '[:space:]')
-curl -fsSL "https://github.com/jj-vcs/jj/releases/download/${JJ_VERSION}/jj-${JJ_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
-    | tar -xz -C /usr/local/bin
 
 rm -rf /var/lib/apt/lists/*
 EOF
 
+RUN userdel -r ubuntu 2>/dev/null || true \
+ && useradd -m -u 1000 -s /bin/bash am \
+ && mkdir -p /workspace && chown am:am /workspace
+
+USER am
+ENV HOME=/home/am
 WORKDIR /workspace
 ```
 
@@ -168,4 +170,4 @@ Unlike some agents that use a single credentials file, Copilot requires both `~/
 
 **Customizing the image**
 
-The included Dockerfile installs Node.js 22+ (required by `@github/copilot`), the GitHub CLI, and common developer tools. Add your project's language runtimes or toolchain to the `apt-get install` block as needed.
+Use `dockerfiles/Dockerfile.copilot-minimal` as a base and layer your project's language runtimes and tools on top. The only hard requirements are `gh` and the Copilot extension on the container's `PATH`. See the [Custom Container Images](custom-images.md) guide for patterns and ready-to-use examples.

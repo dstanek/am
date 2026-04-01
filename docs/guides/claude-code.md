@@ -32,32 +32,33 @@ podman pull ghcr.io/dstanek/am-claude:latest
 
 ### Build from source
 
-If you need to add project-specific tools, the `dockerfiles/Dockerfile.claude` file in this repository is a production-ready starting point:
+If you need to add project-specific tools, the Dockerfiles in this repository are a good starting point:
+
+- `dockerfiles/Dockerfile.claude` — full image with git, jj, ripgrep, jq, neovim, and common dev tools
+- `dockerfiles/Dockerfile.claude-minimal` — minimal image with only git and the Claude binary; use this as a base for project-specific images
+
+The minimal image:
 
 ```dockerfile
 FROM ubuntu:25.10
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN <<EOF
-set -e
+RUN apt-get update && apt-get install -y \
+    ca-certificates curl git \
+ && rm -rf /var/lib/apt/lists/*
 
-apt-get update && apt-get install -y \
-    ca-certificates curl wget gnupg git build-essential \
-    python3 python3-pip python3-venv ripgrep fd-find jq unzip less neovim ssh
-ln -s /usr/bin/fdfind /usr/local/bin/fd
+RUN userdel -r ubuntu 2>/dev/null || true \
+ && useradd -m -u 1000 -s /bin/bash am \
+ && mkdir -p /workspace && chown am:am /workspace
 
-curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
-apt-get install -y nodejs
+USER am
+ENV HOME=/home/am
 
-npm install -g @anthropic-ai/claude-code
+RUN curl -fsSL https://claude.ai/install.sh | bash
 
-JJ_VERSION=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/jj-vcs/jj/releases/latest | sed 's|.*/tag/||' | tr -d '[:space:]')
-curl -fsSL "https://github.com/jj-vcs/jj/releases/download/${JJ_VERSION}/jj-${JJ_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
-    | tar -xz -C /usr/local/bin
-
-rm -rf /var/lib/apt/lists/*
-EOF
+ENV PATH="/home/am/.local/bin:${PATH}"
+ENV DISABLE_AUTOUPDATER=1
 
 WORKDIR /workspace
 ```
@@ -158,4 +159,4 @@ This passes the value of `ANTHROPIC_API_KEY` from your current shell environment
 
 **Customizing the image**
 
-The included Dockerfile is a starting point. Add your project's language runtimes, linters, or build tools to the `apt-get install` block. The only hard requirement is that `claude` (the Claude Code CLI) is installed and available on the container's `PATH`.
+Use `dockerfiles/Dockerfile.claude-minimal` as a base and layer your project's language runtimes and tools on top. The only hard requirement is that `claude` is on the container's `PATH`. See the [Custom Container Images](custom-images.md) guide for patterns and ready-to-use examples.

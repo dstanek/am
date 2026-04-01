@@ -1,28 +1,10 @@
-FROM am-claude:latest
-
-# Build tools needed for git2's vendored libgit2 + openssl
-USER root
-RUN <<EOF
-set -e
-apt-get update && apt-get install -y \
-    cmake \
-    perl \
-    pkg-config \
-    libssl-dev
-rm -rf /var/lib/apt/lists/*
-EOF
-
-# Install Rust via rustup as the `am` user
-USER am
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --default-toolchain stable --profile minimal
-ENV PATH="/home/am/.cargo/bin:${PATH}"
+FROM am-rust:latest
 
 # Configure git identity — required by `am` tests that run `git commit`
 RUN git config --global user.email "dev@example.com" \
  && git config --global user.name "Dev"
 
-# Pre-fetch dependencies so incremental rebuilds inside the container are fast.
+# Pre-fetch Cargo dependencies so incremental builds inside the container are fast.
 # Copy only the manifest files first; source is mounted at runtime.
 WORKDIR /workspace
 COPY --chown=am:am Cargo.toml Cargo.lock ./

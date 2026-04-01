@@ -1,0 +1,41 @@
+# Rust development environment — agent-agnostic.
+#
+# Build with any am agent image as the base:
+#
+#   podman build --build-arg BASE_IMAGE=ghcr.io/dstanek/am-claude:latest \
+#       -f examples/Dockerfile.rust -t my-project:latest .
+#
+#   podman build --build-arg BASE_IMAGE=ghcr.io/dstanek/am-copilot:latest \
+#       -f examples/Dockerfile.rust -t my-project:latest .
+
+ARG BASE_IMAGE=ghcr.io/dstanek/am-claude:latest
+FROM ${BASE_IMAGE}
+
+USER root
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    perl \
+    pkg-config \
+    libssl-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+USER am
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --default-toolchain stable --profile minimal
+
+ENV PATH="/home/am/.cargo/bin:${PATH}"
+
+# Pre-fetch Cargo dependencies.
+# Copy only the manifests so this layer is invalidated only when dependencies change,
+# not on every source code edit.
+#
+# COPY --chown=am:am Cargo.toml Cargo.lock /workspace/
+# RUN mkdir -p /workspace/src \
+#  && echo 'fn main() {}' > /workspace/src/main.rs \
+#  && cargo fetch --manifest-path /workspace/Cargo.toml \
+#  && rm -rf /workspace/src
+
+WORKDIR /workspace
