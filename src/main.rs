@@ -381,14 +381,23 @@ fn cmd_destroy(slug: &str, force: bool) -> anyhow::Result<()> {
         }
     }
 
-    // Remove worktree — warn but continue if it's already gone
+    // Remove worktree — fail hard so the session record is preserved if
+    // cleanup fails (otherwise the workspace becomes untracked/orphaned).
+    // Use --force to skip worktree removal and delete the session record anyway.
     let vcs = worktree::detect_vcs(&repo_root).unwrap_or(config::Vcs::Git);
     let remove_result = match vcs {
         config::Vcs::Git => worktree::remove_git_worktree(slug, &repo_root),
         config::Vcs::Jj => worktree::remove_jj_workspace(slug, &repo_root),
     };
     if let Err(e) = remove_result {
-        eprintln!("warning: could not fully remove worktree: {e}");
+        if force {
+            eprintln!("warning: could not fully remove worktree: {e}");
+        } else {
+            return Err(e.context(
+                "worktree removal failed; session record preserved. \
+                Re-run with --force to skip worktree cleanup and remove the session anyway.",
+            ));
+        }
     }
 
     // Remove session record
