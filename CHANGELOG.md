@@ -1,3 +1,50 @@
+## [0.2.0] - 2026-04-01
+
+### 🚀 Features
+
+- *(dockerfiles)* Install jj in agent container images
+- *(ci)* Add workflow to publish container images to GHCR
+- *(start)* Hide container command echo and clear pane on exit
+- *(cli)* Add --version flag
+- *(container)* Add project-specific dev image and custom images guide
+- *(cli)* Add --auto flag for autonomous agent mode
+- *(worktree)* Warn about uncommitted git changes before destroy
+- *(tmux)* Rename current window instead of creating a new one
+
+### 🐛 Bug Fixes
+
+- *(ci)* Force actions to use Node 24 runtime
+- *(container)* Mount .git for colocated jj+git repos
+- *(main)* Traverse past jj workspaces when finding repo root
+- *(worktree)* Improve error message for unborn HEAD in git repos
+- *(tmux)* Launch container via send-keys instead of window shell cmd
+- *(container)* Run agents as non-root user in containers
+- *(destroy)* Preserve session record when worktree removal fails
+
+### 🚜 Refactor
+
+- *(cli)* Rename `clean` command to `destroy`
+
+### 📚 Documentation
+
+- Add MkDocs Material site with full documentation
+- *(index)* Rewrite landing page to lead with problem, not features
+- *(plan)* Document autonomous mode and team orchestration backlog items
+- Add commit trailers reference page and update CLAUDE.md
+- Consolidate outstanding work into BACKLOG.md
+- Point to GHCR images for claude and copilot
+- *(claude)* Require running tests after every code change
+- *(claude)* Trim CLAUDE.md to reduce token usage
+- *(quick-start)* Move prerequisites to the top
+
+### 🧪 Testing
+
+- *(config)* Guard file-only tests against env var contamination
+
+### ⚙️ Miscellaneous Tasks
+
+- Update repo references from dstanek/am to dstanek/agent-manager
+- *(ci)* Add Clippy lint enforcement
 ## [0.1.2] - 2026-03-28
 
 ### 🐛 Bug Fixes
@@ -7,6 +54,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - *(release)* Update release command for jj push workflow
+- *(release)* V0.1.2
 ## [0.1.1] - 2026-03-28
 
 ### 🐛 Bug Fixes
