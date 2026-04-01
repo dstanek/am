@@ -127,6 +127,13 @@ pub fn current_window_name() -> Result<String> {
     run_tmux_output(&["display-message", "-p", "#W"])
 }
 
+/// Returns the working directory of the current tmux pane.
+/// `tmux display-message -p '#{pane_current_path}'`
+pub fn current_pane_path() -> Result<std::path::PathBuf> {
+    let s = run_tmux_output(&["display-message", "-p", "#{pane_current_path}"])?;
+    Ok(std::path::PathBuf::from(s))
+}
+
 /// Rename a tmux window.
 /// If `target` is `None`, renames the current window.
 /// `tmux rename-window [-t <target>] <new_name>`
@@ -314,6 +321,15 @@ mod tests {
         let out = mock.captured();
         assert!(out.contains("display-message"));
         assert!(out.contains("#W"));
+    }
+
+    #[test]
+    fn current_pane_path_sends_display_message() {
+        let mock = MockTmux::new();
+        let _ = current_pane_path();
+        let out = mock.captured();
+        assert!(out.contains("display-message"));
+        assert!(out.contains("pane_current_path"));
     }
 
     #[test]

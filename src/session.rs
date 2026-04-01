@@ -29,6 +29,10 @@ pub struct Session {
     /// `None` for old-style sessions that owned a dedicated window.
     #[serde(default)]
     pub original_window_name: Option<String>,
+    /// The shell pane's working directory at session creation time.
+    /// Used to restore the directory when the session is destroyed.
+    #[serde(default)]
+    pub original_shell_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -105,6 +109,7 @@ mod tests {
             container: None,
             auto: false,
             original_window_name: None,
+            original_shell_dir: None,
         }
     }
 
