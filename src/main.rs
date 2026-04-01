@@ -160,7 +160,11 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
             cfg.container.ssh.as_deref(),
         )?;
 
-        let extra_env: Vec<(&str, &str)> = vec![];
+        let extra_env = if let Some(ref agent) = effective_agent {
+            container::agent_extra_env(agent)?
+        } else {
+            vec![]
+        };
         let mut cmd = container::build_run_command(
             &runtime,
             image,

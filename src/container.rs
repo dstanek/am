@@ -212,6 +212,33 @@ pub fn agent_auto_flags(agent: &str) -> Vec<String> {
     }
 }
 
+/// Runs `gh auth token` and returns the token string.
+fn get_gh_token() -> Result<String> {
+    let output = std::process::Command::new("gh")
+        .args(["auth", "token"])
+        .output()
+        .map_err(|e| AmError::ConfigError(format!("failed to run 'gh auth token': {e}")))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(AmError::ConfigError(format!(
+            "gh auth token failed — make sure you are authenticated with 'gh auth login': {stderr}"
+        ))
+        .into());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Returns extra environment variables to inject into the container for the given agent.
+pub fn agent_extra_env(agent: &str) -> Result<Vec<(String, String)>> {
+    match agent {
+        "copilot" => {
+            let token = get_gh_token()?;
+            Ok(vec![("GH_TOKEN".to_string(), token)])
+        }
+        _ => Ok(vec![]),
+    }
+}
+
 /// Validate that a known agent has its required credential directories
 /// present on the host. Unknown values are treated as raw commands and always pass.
 /// Call this early in `am start` before any side effects.
@@ -270,7 +297,7 @@ pub fn build_run_command(
     image: &str,
     mounts: &ContainerMounts,
     env_passthrough: &[String],
-    extra_env: &[(&str, &str)],
+    extra_env: &[(String, String)],
     network: &NetworkMode,
     container_name: &str,
 ) -> Vec<String> {
@@ -359,7 +386,7 @@ pub fn build_run_command(
         }
     }
 
-    // Extra env vars (e.g. from config)
+    // Extra env vars (e.g. agent-specific tokens)
     for (key, val) in extra_env {
         cmd.push("-e".to_string());
         cmd.push(format!("{key}={val}"));
