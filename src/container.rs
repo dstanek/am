@@ -324,33 +324,39 @@ pub fn build_run_command(
         cmd.push(mount_str(git, &git_str, MountMode::ReadWrite, selinux));
     }
 
-    // ~/.gitconfig
-    cmd.push("-v".to_string());
-    cmd.push(mount_str(
-        &mounts.gitconfig_host,
-        "/home/am/.gitconfig",
-        MountMode::ReadOnly,
-        selinux,
-    ));
-
-    // ~/.ssh
-    cmd.push("-v".to_string());
-    cmd.push(mount_str(
-        &mounts.ssh_host,
-        "/home/am/.ssh",
-        MountMode::ReadOnly,
-        selinux,
-    ));
-
-    // Agent auth mounts
-    for auth in &mounts.agent_auth {
+    // ~/.gitconfig — only mount if the file exists
+    if mounts.gitconfig_host.exists() {
         cmd.push("-v".to_string());
         cmd.push(mount_str(
-            &auth.host_path,
-            auth.container_path.to_str().unwrap_or("/home/am/.agent"),
-            auth.mode.clone(),
+            &mounts.gitconfig_host,
+            "/home/am/.gitconfig",
+            MountMode::ReadOnly,
             selinux,
         ));
+    }
+
+    // ~/.ssh — only mount if the directory exists
+    if mounts.ssh_host.exists() {
+        cmd.push("-v".to_string());
+        cmd.push(mount_str(
+            &mounts.ssh_host,
+            "/home/am/.ssh",
+            MountMode::ReadOnly,
+            selinux,
+        ));
+    }
+
+    // Agent auth mounts — only mount if the path exists
+    for auth in &mounts.agent_auth {
+        if auth.host_path.exists() {
+            cmd.push("-v".to_string());
+            cmd.push(mount_str(
+                &auth.host_path,
+                auth.container_path.to_str().unwrap_or("/home/am/.agent"),
+                auth.mode.clone(),
+                selinux,
+            ));
+        }
     }
 
     // Extra env vars (e.g. from config)
@@ -710,6 +716,9 @@ mod tests {
     #[test]
     fn build_run_command_includes_all_mounts() {
         let tmp = TempDir::new().unwrap();
+        // Create the paths so the existence checks pass
+        std::fs::write(tmp.path().join(".gitconfig"), "").unwrap();
+        std::fs::create_dir_all(tmp.path().join(".ssh")).unwrap();
         let mounts = make_mounts(tmp.path());
         let worktree = tmp
             .path()
@@ -940,6 +949,9 @@ mod tests {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
+
+        // Create the claude config dir so the existence check passes
+        std::fs::create_dir_all(tmp.path().join(".claude")).unwrap();
 
         let mut mounts = make_mounts(tmp.path());
         mounts.agent_auth = vec![AgentAuthMount {
