@@ -59,7 +59,7 @@ pub fn create_window(window_name: &str, working_dir: &Path) -> Result<()> {
         "-n",
         window_name,
         "-c",
-        working_dir.to_str().unwrap_or("."),
+        &working_dir.to_string_lossy(),
     ])
 }
 
@@ -73,7 +73,7 @@ pub fn create_window_with_shell_cmd(window_name: &str, working_dir: &Path, shell
         "-n",
         window_name,
         "-c",
-        working_dir.to_str().unwrap_or("."),
+        &working_dir.to_string_lossy(),
         shell_cmd,
     ])
 }
@@ -90,7 +90,7 @@ pub fn split_window(window_name: &str, working_dir: &Path, direction: &SplitDire
         "split-window",
         flag,
         "-c",
-        working_dir.to_str().unwrap_or("."),
+        &working_dir.to_string_lossy(),
         "-t",
         window_name,
     ])

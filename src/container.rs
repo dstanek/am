@@ -379,7 +379,7 @@ pub fn build_run_command(
             cmd.push("-v".to_string());
             cmd.push(mount_str(
                 &auth.host_path,
-                auth.container_path.to_str().unwrap_or("/home/am/.agent"),
+                &auth.container_path.to_string_lossy(),
                 auth.mode.clone(),
                 selinux,
             ));
