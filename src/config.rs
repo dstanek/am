@@ -195,64 +195,49 @@ struct FileConfig {
     container: FileContainer,
 }
 
-fn apply_file_config(base: &mut Config, file: FileConfig) {
-    if let Some(v) = file.defaults.vcs {
-        base.vcs = v;
+fn apply_opt<T: Clone>(target: &mut T, value: Option<T>) {
+    if let Some(v) = value {
+        *target = v;
     }
-    if let Some(v) = file.defaults.agent {
+}
+
+fn apply_opt_some<T: Clone>(target: &mut Option<T>, value: Option<T>) {
+    if let Some(v) = value {
+        *target = Some(v);
+    }
+}
+
+fn apply_opt_string(target: &mut Option<String>, value: Option<String>) {
+    if let Some(v) = value {
         if !v.is_empty() {
-            base.agent = Some(v);
+            *target = Some(v);
         }
     }
+}
+
+fn apply_file_config(base: &mut Config, file: FileConfig) {
+    apply_opt(&mut base.vcs, file.defaults.vcs);
+    apply_opt_string(&mut base.agent, file.defaults.agent);
+
     // Merge agents: file entries extend/override the compiled-in defaults.
     for (name, file_agent) in file.agents {
         let entry = base.agents.entry(name).or_default();
-        if let Some(image) = file_agent.image {
-            if !image.is_empty() {
-                entry.image = Some(image);
-            }
-        }
+        apply_opt_string(&mut entry.image, file_agent.image);
     }
-    if let Some(v) = file.tmux.agent_pane {
-        base.tmux.agent_pane = v;
-    }
-    if let Some(v) = file.tmux.split {
-        base.tmux.split = v;
-    }
-    if let Some(v) = file.tmux.split_percent {
-        base.tmux.split_percent = v;
-    }
-    if let Some(v) = file.container.enabled {
-        base.container.enabled = v;
-    }
-    if let Some(v) = file.container.runtime {
-        base.container.runtime = v;
-    }
-    if let Some(v) = file.container.image {
-        if !v.is_empty() {
-            base.container.image = Some(v);
-        }
-    }
-    if let Some(v) = file.container.agent {
-        if !v.is_empty() {
-            base.container.agent = Some(v);
-        }
-    }
-    if let Some(v) = file.container.network {
-        base.container.network = v;
-    }
-    if let Some(v) = file.container.env {
-        base.container.env = v;
-    }
-    if let Some(v) = file.container.startup_delay_ms {
-        base.container.startup_delay_ms = v;
-    }
-    if let Some(v) = file.container.gitconfig {
-        base.container.gitconfig = Some(v);
-    }
-    if let Some(v) = file.container.ssh {
-        base.container.ssh = Some(v);
-    }
+
+    apply_opt(&mut base.tmux.agent_pane, file.tmux.agent_pane);
+    apply_opt(&mut base.tmux.split, file.tmux.split);
+    apply_opt(&mut base.tmux.split_percent, file.tmux.split_percent);
+
+    apply_opt(&mut base.container.enabled, file.container.enabled);
+    apply_opt(&mut base.container.runtime, file.container.runtime);
+    apply_opt_string(&mut base.container.image, file.container.image);
+    apply_opt_string(&mut base.container.agent, file.container.agent);
+    apply_opt(&mut base.container.network, file.container.network);
+    apply_opt(&mut base.container.env, file.container.env);
+    apply_opt(&mut base.container.startup_delay_ms, file.container.startup_delay_ms);
+    apply_opt_some(&mut base.container.gitconfig, file.container.gitconfig);
+    apply_opt_some(&mut base.container.ssh, file.container.ssh);
 }
 
 fn parse_config_file(path: &Path) -> Result<FileConfig> {
