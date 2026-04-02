@@ -2,6 +2,7 @@ Feature: container integration — session isolation with a container runtime
 
   Background:
     Given a git repository
+    And am init has been run
     And I am inside a tmux session
     And I am using a mock container runtime
 

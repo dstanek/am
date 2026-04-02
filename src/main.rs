@@ -129,7 +129,17 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
         container::validate_agent(agent)?;
     }
 
-    // 4. Container config
+    // 4. Require am init when using containers
+    if cfg.container.enabled && !no_container {
+        let gitconfig_path = repo_root.join(".am").join("gitconfig");
+        if !gitconfig_path.exists() && cfg.container.gitconfig.is_none() {
+            return Err(anyhow::anyhow!(
+                ".am/gitconfig not found — run 'am init' first to create the project configuration"
+            ));
+        }
+    }
+
+    // 5. Container config
     let use_container = cfg.container.enabled && !no_container;
     let (_runtime, container_cmd, session_container) = if use_container {
         let image = cfg.container.image.as_deref()
