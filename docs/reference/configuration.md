@@ -44,13 +44,14 @@ The project config overrides global defaults for a specific repository. It is cr
 am init
 ```
 
-A minimal project config that sets the container image and agent looks like this:
+A minimal project config that sets the agent looks like this:
 
 ```toml
-[container]
-image = "am-claude:latest"
+[defaults]
 agent = "claude"
 ```
+
+Selecting the agent also selects the container image — `am` ships with built-in image defaults for `claude` and `copilot`. You do not need to configure the image separately unless you are using a custom one.
 
 ---
 
@@ -67,8 +68,7 @@ Environment variables override both the global and project configs and are usefu
 | `AM_TMUX_SPLIT_PERCENT` | `tmux.split_percent` | integer 1–99 | `AM_TMUX_SPLIT_PERCENT=30` |
 | `AM_CONTAINER_ENABLED` | `container.enabled` | `true`/`1`/`yes`, `false`/`0`/`no` | `AM_CONTAINER_ENABLED=false` |
 | `AM_CONTAINER_RUNTIME` | `container.runtime` | `auto`, `podman`, `docker` | `AM_CONTAINER_RUNTIME=docker` |
-| `AM_CONTAINER_IMAGE` | `container.image` | any non-empty string | `AM_CONTAINER_IMAGE=ubuntu:24.04` |
-| `AM_CONTAINER_AGENT` | `container.agent` | any non-empty string | `AM_CONTAINER_AGENT=codex` |
+| `AM_CONTAINER_IMAGE` | `container.image` | any non-empty string | `AM_CONTAINER_IMAGE=my-image:latest` — overrides the image for all agents |
 | `AM_CONTAINER_NETWORK` | `container.network` | `full`, `none` | `AM_CONTAINER_NETWORK=none` |
 | `AM_CONTAINER_STARTUP_DELAY_MS` | `container.startup_delay_ms` | non-negative integer | `AM_CONTAINER_STARTUP_DELAY_MS=1000` |
 
@@ -94,7 +94,34 @@ Top-level defaults that apply across all sessions unless overridden.
 | Key | Type | Default | Description | Valid Values |
 |---|---|---|---|---|
 | `vcs` | string | `"git"` | Version control system used to create worktrees or workspaces | `"git"`, `"jj"` |
-| `agent` | string | `""` | Default agent command launched in the agent pane; empty means no agent is auto-launched | Any known agent name, e.g. `"claude"`, `"copilot"` |
+| `agent` | string | `""` | Default agent launched in the agent pane; also selects the container image via `[agents.<name>]`; empty means no agent is auto-launched | Any known agent name, e.g. `"claude"`, `"copilot"` |
+
+### `[agents.<name>]`
+
+Per-agent configuration. `am` ships with compiled-in image defaults for `claude` and `copilot`; define an entry here to override them or to add images for other agents.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `image` | string | see below | Container image to use when this agent is selected |
+
+**Compiled-in defaults:**
+
+| Agent | Default image |
+|---|---|
+| `claude` | `ghcr.io/dstanek/am-claude-minimal:latest` |
+| `copilot` | `ghcr.io/dstanek/am-copilot-minimal:latest` |
+
+Example — override the claude image and add a gemini entry:
+
+```toml
+[agents.claude]
+image = "my-org/am-claude:v2"
+
+[agents.gemini]
+image = "my-org/am-gemini:latest"
+```
+
+Agent entries are **merged** across config layers: global config entries extend the compiled-in defaults, and project config entries extend the global ones. Only keys you set in a later layer are overridden — other agents keep their values from earlier layers.
 
 ### `[tmux]`
 
@@ -108,14 +135,13 @@ Controls how the tmux window and panes are arranged for each session.
 
 ### `[container]`
 
-Controls container lifecycle, the image used, and what gets mounted or exposed inside the container.
+Controls container lifecycle and what gets mounted or exposed inside the container.
 
 | Key | Type | Default | Description | Valid Values |
 |---|---|---|---|---|
 | `enabled` | boolean | `true` | Whether to run sessions inside a container | `true`, `false` |
 | `runtime` | string | `"auto"` | Container runtime to use; `"auto"` tries Podman first, then Docker | `"auto"`, `"podman"`, `"docker"` |
-| `image` | string | `"ubuntu:25.10"` | Container image to run; must be explicitly set to a useful image when `enabled = true` | Any valid image reference, e.g. `"am-claude:latest"` |
-| `agent` | string | `""` | Agent integration to activate for containers; takes precedence over `defaults.agent` when running in a container | Any known agent name |
+| `image` | string | `""` | Override image for all agents; takes priority over `[agents.<name>].image`; leave unset to use the per-agent default | Any valid image reference |
 | `network` | string | `"full"` | Network access mode for the container | `"full"` (unrestricted internet access), `"none"` (no network) |
 | `env` | list of strings | `[]` | Extra environment variables passed into the container from the host shell | e.g. `["ANTHROPIC_API_KEY", "FOO=bar"]` |
 | `startup_delay_ms` | integer | `500` | Milliseconds to wait after container start before sending the agent command to the pane | Any non-negative integer |
@@ -123,5 +149,5 @@ Controls container lifecycle, the image used, and what gets mounted or exposed i
 !!! tip "Choosing `startup_delay_ms`"
     The default 500 ms is usually enough for a pre-pulled image on a local machine. If you are pulling a large image or running on a slow host, increase this value (e.g. `startup_delay_ms = 2000`) to avoid sending the agent command before the container shell is ready.
 
-!!! note "Setting `container.image`"
-    The compiled-in default image (`ubuntu:25.10`) is a bare Ubuntu image that does not contain any agent software. You should always set `container.image` to an image that has your agent installed. See the [Claude Code guide](../guides/claude-code.md) or the [GitHub Copilot guide](../guides/github-copilot.md) for ready-to-use Dockerfiles.
+!!! note "Image selection"
+    In most cases you do not need to set `container.image`. `am` resolves the image from the active agent via `[agents.<name>].image`, with built-in defaults for `claude` and `copilot`. Set `container.image` only when you want a single image to apply regardless of which agent is selected.

@@ -163,21 +163,17 @@ The key steps are:
 
 ## Configuring `am` to use your image
 
-Set `image` (and optionally `agent`) in `.am/config.toml`:
+Set the agent and override its image in `.am/config.toml`:
 
 ```toml
-[container]
-image = "am-dev:latest"
+[defaults]
 agent = "claude"
+
+[agents.claude]
+image = "am-dev:latest"
 ```
 
-Or pass it per-invocation:
-
-```sh
-am start my-feature --image am-dev:latest --agent claude
-```
-
-The `agent` key tells `am` which credential mount preset to use. It does not have to match the image name — an image named `am-dev` can still use the `claude` preset.
+The `[agents.<name>]` entry tells `am` both which credential mount preset to use and which image to run. The image name does not have to match the agent name — an image named `am-dev` can still use the `claude` preset.
 
 ---
 

@@ -91,15 +91,24 @@ podman build -f dockerfiles/Dockerfile.copilot -t am-copilot:latest .
 
 ## Project configuration
 
-Set the image and agent in `.am/config.toml`:
+Set the agent in `.am/config.toml`:
 
 ```toml
-[container]
-image = "ghcr.io/dstanek/am-copilot:latest"
+[defaults]
 agent = "copilot"
 ```
 
-With `agent = "copilot"` in config, `am start` will automatically activate the Copilot agent integration and launch the agent without requiring any extra flags.
+`am` automatically selects the container image based on the agent — the built-in default for `copilot` is `ghcr.io/dstanek/am-copilot-minimal:latest`. With `agent` set in config, `am start` will automatically activate the Copilot agent integration and launch the agent without requiring any extra flags.
+
+To use a different image (e.g. the full image or a custom one), override it under `[agents.copilot]`:
+
+```toml
+[defaults]
+agent = "copilot"
+
+[agents.copilot]
+image = "ghcr.io/dstanek/am-copilot:latest"
+```
 
 ---
 

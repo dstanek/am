@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -48,6 +49,12 @@ pub enum NetworkMode {
 
 // ── Config structs ────────────────────────────────────────────────────────────
 
+/// Per-agent configuration (image override, etc.)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AgentSettings {
+    pub image: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TmuxConfig {
     pub agent_pane: PaneSide,
@@ -83,7 +90,7 @@ impl Default for ContainerConfig {
         Self {
             enabled: true,
             runtime: RuntimePreference::Auto,
-            image: Some("ghcr.io/dstanek/am-claude-minimal:latest".to_string()),
+            image: None,
             agent: None,
             network: NetworkMode::Full,
             env: Vec::new(),
@@ -98,8 +105,20 @@ impl Default for ContainerConfig {
 pub struct Config {
     pub vcs: Vcs,
     pub agent: Option<String>,
+    /// Per-agent settings (image, etc.). Compiled-in defaults for known agents.
+    pub agents: HashMap<String, AgentSettings>,
     pub tmux: TmuxConfig,
     pub container: ContainerConfig,
+}
+
+fn default_agent_images() -> HashMap<String, AgentSettings> {
+    [
+        ("claude", "ghcr.io/dstanek/am-claude-minimal:latest"),
+        ("copilot", "ghcr.io/dstanek/am-copilot-minimal:latest"),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), AgentSettings { image: Some(v.to_string()) }))
+    .collect()
 }
 
 impl Default for Config {
@@ -107,10 +126,28 @@ impl Default for Config {
         Self {
             vcs: Vcs::Git,
             agent: None,
+            agents: default_agent_images(),
             tmux: TmuxConfig::default(),
             container: ContainerConfig::default(),
         }
     }
+}
+
+/// Resolve the container image for a given agent name.
+///
+/// Resolution order (first match wins):
+/// 1. `container.image` — explicit override for custom images
+/// 2. `agents[name].image` — agent-specific image (compiled-in defaults or user config)
+pub fn resolve_image<'a>(agent: Option<&str>, cfg: &'a Config) -> Option<&'a str> {
+    if let Some(img) = cfg.container.image.as_deref().filter(|s| !s.is_empty()) {
+        return Some(img);
+    }
+    if let Some(name) = agent {
+        if let Some(settings) = cfg.agents.get(name) {
+            return settings.image.as_deref().filter(|s| !s.is_empty());
+        }
+    }
+    None
 }
 
 // ── TOML file shapes (partial overrides allowed) ──────────────────────────────
@@ -119,6 +156,11 @@ impl Default for Config {
 struct FileDefaults {
     vcs: Option<Vcs>,
     agent: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct FileAgentSettings {
+    image: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -146,6 +188,8 @@ struct FileConfig {
     #[serde(default)]
     defaults: FileDefaults,
     #[serde(default)]
+    agents: HashMap<String, FileAgentSettings>,
+    #[serde(default)]
     tmux: FileTmux,
     #[serde(default)]
     container: FileContainer,
@@ -158,6 +202,15 @@ fn apply_file_config(base: &mut Config, file: FileConfig) {
     if let Some(v) = file.defaults.agent {
         if !v.is_empty() {
             base.agent = Some(v);
+        }
+    }
+    // Merge agents: file entries extend/override the compiled-in defaults.
+    for (name, file_agent) in file.agents {
+        let entry = base.agents.entry(name).or_default();
+        if let Some(image) = file_agent.image {
+            if !image.is_empty() {
+                entry.image = Some(image);
+            }
         }
     }
     if let Some(v) = file.tmux.agent_pane {
@@ -235,7 +288,14 @@ pub fn write_defaults(path: &Path) -> Result<()> {
 
 [defaults]
 # vcs = "git"            # "git" | "jj"
-# agent = ""             # default agent, e.g. "claude"
+# agent = "claude"       # agent to launch, e.g. "claude" | "copilot" — also selects the container image
+
+# Override the container image for a specific agent (built-in defaults shown):
+# [agents.claude]
+# image = "ghcr.io/dstanek/am-claude-minimal:latest"
+#
+# [agents.copilot]
+# image = "ghcr.io/dstanek/am-copilot-minimal:latest"
 
 [tmux]
 # agent_pane = "left"    # which pane gets the agent: "left" | "right"
@@ -245,13 +305,12 @@ pub fn write_defaults(path: &Path) -> Result<()> {
 [container]
 # enabled = true
 # runtime = "auto"       # "auto" | "podman" | "docker"
-# image = "ghcr.io/dstanek/am-claude-minimal:latest" # container image to run
-# agent = ""             # agent for this project's containers (overrides defaults.agent)
 # network = "full"       # "full" | "none"
 # env = []               # extra environment variables to pass into the container
 # startup_delay_ms = 500 # ms to wait after container start before sending the agent command
-# gitconfig = ""        # path to gitconfig to mount (default: ~/.gitconfig)
-# ssh = ""              # path to SSH dir to mount (default: ~/.ssh)
+# gitconfig = ""         # path to gitconfig to mount (default: ~/.gitconfig)
+# ssh = ""               # path to SSH dir to mount (default: ~/.ssh)
+# image = ""             # override image for all agents (advanced; prefer [agents.<name>].image)
 "#;
     std::fs::write(path, content)?;
     Ok(())
@@ -272,7 +331,18 @@ pub fn global_config_template() -> &'static str {
 
 [defaults]
 vcs = "git"            # "git" | "jj"
-agent = ""             # default agent for all sessions, e.g. "claude", "codex", "gemini"
+agent = "claude"       # agent to launch; also selects the container image via [agents.<name>]
+
+# Per-agent image configuration. These are the compiled-in defaults — override here if needed.
+[agents.claude]
+image = "ghcr.io/dstanek/am-claude-minimal:latest"
+
+[agents.copilot]
+image = "ghcr.io/dstanek/am-copilot-minimal:latest"
+
+# Add entries for any other agent you use, e.g.:
+# [agents.gemini]
+# image = "ghcr.io/your-org/am-gemini:latest"
 
 [tmux]
 agent_pane = "left"    # which pane gets the agent: "left" | "right"
@@ -282,13 +352,12 @@ split_percent = 50     # percentage of the window given to the agent pane (1-99)
 [container]
 enabled = true
 runtime = "auto"       # "auto" (podman first, then docker) | "podman" | "docker"
-image = "ghcr.io/dstanek/am-claude-minimal:latest" # container image; must be set when container.enabled = true
-agent = ""             # agent for containers (overrides defaults.agent in container context)
 network = "full"       # "full" (unrestricted) | "none" (no network access)
 env = []               # extra environment variables passed into the container, e.g. ["FOO=bar"]
 startup_delay_ms = 500 # ms to wait after container start before sending the agent command
 # gitconfig = ""        # path to gitconfig to mount (default: ~/.gitconfig)
 # ssh = ""              # path to SSH dir to mount (default: ~/.ssh)
+# image = ""            # override image for all agents (advanced; prefer [agents.<name>].image above)
 "#
 }
 
@@ -425,7 +494,16 @@ mod tests {
         assert_eq!(config.tmux.split_percent, 50);
         assert!(config.container.enabled);
         assert_eq!(config.container.runtime, RuntimePreference::Auto);
-        assert_eq!(config.container.image.as_deref(), Some("ghcr.io/dstanek/am-claude-minimal:latest"));
+        assert!(config.container.image.is_none());
+        // Compiled-in defaults provide images for known agents
+        assert_eq!(
+            config.agents.get("claude").and_then(|a| a.image.as_deref()),
+            Some("ghcr.io/dstanek/am-claude-minimal:latest")
+        );
+        assert_eq!(
+            config.agents.get("copilot").and_then(|a| a.image.as_deref()),
+            Some("ghcr.io/dstanek/am-copilot-minimal:latest")
+        );
     }
 
     #[test]
@@ -531,5 +609,92 @@ image = "project-image"
 
         assert_eq!(config.agent.as_deref(), Some("codex"));
         assert_eq!(config.container.image.as_deref(), Some("env-image"));
+    }
+
+    #[test]
+    fn resolve_image_uses_agent_mapping() {
+        let config = Config::default();
+        assert_eq!(
+            resolve_image(Some("claude"), &config),
+            Some("ghcr.io/dstanek/am-claude-minimal:latest")
+        );
+        assert_eq!(
+            resolve_image(Some("copilot"), &config),
+            Some("ghcr.io/dstanek/am-copilot-minimal:latest")
+        );
+    }
+
+    #[test]
+    fn resolve_image_container_image_overrides_agent() {
+        let mut config = Config::default();
+        config.container.image = Some("custom-image:v1".to_string());
+        // container.image takes priority over agent mapping
+        assert_eq!(resolve_image(Some("claude"), &config), Some("custom-image:v1"));
+    }
+
+    #[test]
+    fn resolve_image_returns_none_for_unknown_agent() {
+        let config = Config::default();
+        assert_eq!(resolve_image(Some("unknown-agent"), &config), None);
+        assert_eq!(resolve_image(None, &config), None);
+    }
+
+    #[test]
+    fn agent_image_overridden_in_project_config() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe { std::env::remove_var("AM_AGENT"); }
+        let tmp = TempDir::new().unwrap();
+
+        let project_path = write_toml(tmp.path(), "project.toml", r#"
+[agents.claude]
+image = "myorg/am-claude:custom"
+"#);
+
+        let config = load_with_global(None, Some(&project_path)).unwrap();
+
+        assert_eq!(
+            config.agents.get("claude").and_then(|a| a.image.as_deref()),
+            Some("myorg/am-claude:custom")
+        );
+        // copilot default is still present since project config didn't touch it
+        assert_eq!(
+            config.agents.get("copilot").and_then(|a| a.image.as_deref()),
+            Some("ghcr.io/dstanek/am-copilot-minimal:latest")
+        );
+    }
+
+    #[test]
+    fn agent_images_merged_across_global_and_project() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe { std::env::remove_var("AM_AGENT"); }
+        let tmp = TempDir::new().unwrap();
+
+        let global_path = write_toml(tmp.path(), "global.toml", r#"
+[agents.gemini]
+image = "myorg/am-gemini:latest"
+"#);
+
+        let project_path = write_toml(tmp.path(), "project.toml", r#"
+[agents.claude]
+image = "myorg/am-claude:project"
+"#);
+
+        let config = load_with_global(Some(&global_path), Some(&project_path)).unwrap();
+
+        // Global added gemini
+        assert_eq!(
+            config.agents.get("gemini").and_then(|a| a.image.as_deref()),
+            Some("myorg/am-gemini:latest")
+        );
+        // Project overrode claude
+        assert_eq!(
+            config.agents.get("claude").and_then(|a| a.image.as_deref()),
+            Some("myorg/am-claude:project")
+        );
+        // Compiled-in copilot default still present
+        assert_eq!(
+            config.agents.get("copilot").and_then(|a| a.image.as_deref()),
+            Some("ghcr.io/dstanek/am-copilot-minimal:latest")
+        );
     }
 }

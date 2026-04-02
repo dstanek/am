@@ -60,17 +60,26 @@ This creates a `.am/` directory at the repository root containing:
 
 ---
 
-## Step 2: Configure your container image
+## Step 2: Configure your agent
 
-Open `.am/config.toml` and set the container image you want agents to run inside:
+Open `.am/config.toml` and set the agent you want to use:
 
 ```toml
-[container]
-image = "ghcr.io/myorg/mydevimage:latest"  # your dev image
+[defaults]
 agent = "claude"
 ```
 
-The `agent` field activates the built-in agent integration for that agent. Setting `agent = "claude"` tells `am` to mount your `~/.claude` credentials directory into every container session started from this project.
+Setting the agent does two things: it activates the built-in credential mounts for that agent (e.g. `~/.claude` for `claude`) and automatically selects the right container image. `am` ships with built-in image defaults for `claude` and `copilot`.
+
+To use a custom image, override it under `[agents.<name>]`:
+
+```toml
+[defaults]
+agent = "claude"
+
+[agents.claude]
+image = "ghcr.io/myorg/mydevimage:latest"
+```
 
 !!! tip "Need a ready-to-use image?"
     Pre-built images are available on the GitHub Container Registry: `ghcr.io/dstanek/am-claude:latest` and `ghcr.io/dstanek/am-copilot:latest`. See the [Claude Code guide](../guides/claude-code.md) or [GitHub Copilot guide](../guides/github-copilot.md) for full setup instructions, including how to build a custom image.

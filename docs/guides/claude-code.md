@@ -79,15 +79,24 @@ The build takes a few minutes on the first run. Subsequent builds are fast if th
 
 ## Project configuration
 
-Set the image and agent in `.am/config.toml`:
+Set the agent in `.am/config.toml`:
 
 ```toml
-[container]
-image = "ghcr.io/dstanek/am-claude:latest"
+[defaults]
 agent = "claude"
 ```
 
-With `agent = "claude"` set in the config, you do not need to pass `--agent claude` on every `am start` invocation.
+`am` automatically selects the container image based on the agent — the built-in default for `claude` is `ghcr.io/dstanek/am-claude-minimal:latest`. With `agent` set in config you do not need to pass `--agent claude` on every `am start` invocation.
+
+To use a different image (e.g. the full image or a custom one), override it under `[agents.claude]`:
+
+```toml
+[defaults]
+agent = "claude"
+
+[agents.claude]
+image = "ghcr.io/dstanek/am-claude:latest"
+```
 
 ---
 
@@ -149,9 +158,10 @@ am start feat --agent claude
 If you prefer to authenticate via API key rather than the `~/.claude` credential store, add it to the container's environment in `.am/config.toml`:
 
 ```toml
-[container]
-image = "ghcr.io/dstanek/am-claude:latest"
+[defaults]
 agent = "claude"
+
+[container]
 env = ["ANTHROPIC_API_KEY"]
 ```
 

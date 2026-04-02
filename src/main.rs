@@ -142,8 +142,7 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
     // 5. Container config
     let use_container = cfg.container.enabled && !no_container;
     let (_runtime, container_cmd, session_container) = if use_container {
-        let image = cfg.container.image.as_deref()
-            .filter(|s| !s.is_empty())
+        let image = config::resolve_image(effective_agent.as_deref(), &cfg)
             .ok_or(error::AmError::ContainerImageNotConfigured)?;
 
         let runtime = container::detect_runtime(cfg.container.runtime.clone())?;

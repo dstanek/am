@@ -26,7 +26,7 @@ pub enum AmError {
     #[error("requested container runtime '{0}' not found — install it or change .am/config.toml (container.runtime)")]
     RequestedContainerRuntimeNotFound(String),
 
-    #[error("container.image is not configured — set `container.image` in .am/config.toml or ~/.config/am/config.toml (e.g., image = \"ghcr.io/dstanek/am-claude-minimal:latest\")")]
+    #[error("no container image configured — set an agent with `--agent` or `defaults.agent` in config (image is selected automatically), or set `container.image` for a custom image")]
     ContainerImageNotConfigured,
 
 
@@ -98,9 +98,11 @@ mod tests {
     }
 
     #[test]
-    fn container_image_not_configured_mentions_config() {
+    fn container_image_not_configured_mentions_agent() {
         let e = AmError::ContainerImageNotConfigured;
-        assert!(e.to_string().contains("container.image"));
+        let msg = e.to_string();
+        assert!(msg.contains("--agent"));
+        assert!(msg.contains("defaults.agent"));
     }
 
     #[test]
