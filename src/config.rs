@@ -482,7 +482,7 @@ mod tests {
     #[test]
     fn defaults_when_no_config_files() {
         let _guard = ENV_MUTEX.lock().unwrap();
-        unsafe { std::env::remove_var("AM_AGENT"); }
+        std::env::remove_var("AM_AGENT");
         let tmp = TempDir::new().unwrap();
         let nonexistent_global = tmp.path().join("global.toml");
         let nonexistent_project = tmp.path().join("project.toml");
@@ -509,7 +509,7 @@ mod tests {
     #[test]
     fn project_config_overrides_global() {
         let _guard = ENV_MUTEX.lock().unwrap();
-        unsafe { std::env::remove_var("AM_AGENT"); }
+        std::env::remove_var("AM_AGENT");
         let tmp = TempDir::new().unwrap();
 
         let global_path = write_toml(tmp.path(), "global.toml", r#"
@@ -535,7 +535,7 @@ image = "project-image"
     #[test]
     fn project_config_inherits_unset_global_fields() {
         let _guard = ENV_MUTEX.lock().unwrap();
-        unsafe { std::env::remove_var("AM_AGENT"); }
+        std::env::remove_var("AM_AGENT");
         let tmp = TempDir::new().unwrap();
 
         let global_path = write_toml(tmp.path(), "global.toml", r#"
@@ -595,17 +595,13 @@ agent = "claude"
 image = "project-image"
 "#);
 
-        unsafe {
-            std::env::set_var("AM_AGENT", "codex");
-            std::env::set_var("AM_CONTAINER_IMAGE", "env-image");
-        }
+        std::env::set_var("AM_AGENT", "codex");
+        std::env::set_var("AM_CONTAINER_IMAGE", "env-image");
 
         let config = load_with_global(None, Some(&project_path)).unwrap();
 
-        unsafe {
-            std::env::remove_var("AM_AGENT");
-            std::env::remove_var("AM_CONTAINER_IMAGE");
-        }
+        std::env::remove_var("AM_AGENT");
+        std::env::remove_var("AM_CONTAINER_IMAGE");
 
         assert_eq!(config.agent.as_deref(), Some("codex"));
         assert_eq!(config.container.image.as_deref(), Some("env-image"));
@@ -642,7 +638,7 @@ image = "project-image"
     #[test]
     fn agent_image_overridden_in_project_config() {
         let _guard = ENV_MUTEX.lock().unwrap();
-        unsafe { std::env::remove_var("AM_AGENT"); }
+        std::env::remove_var("AM_AGENT");
         let tmp = TempDir::new().unwrap();
 
         let project_path = write_toml(tmp.path(), "project.toml", r#"
@@ -666,7 +662,7 @@ image = "myorg/am-claude:custom"
     #[test]
     fn agent_images_merged_across_global_and_project() {
         let _guard = ENV_MUTEX.lock().unwrap();
-        unsafe { std::env::remove_var("AM_AGENT"); }
+        std::env::remove_var("AM_AGENT");
         let tmp = TempDir::new().unwrap();
 
         let global_path = write_toml(tmp.path(), "global.toml", r#"
