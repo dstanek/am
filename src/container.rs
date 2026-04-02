@@ -35,10 +35,10 @@ pub struct AgentAuthMount {
 #[derive(Debug, Clone)]
 pub struct ContainerMounts {
     pub worktree_host: PathBuf,
-    pub vcs_host: PathBuf,                   // .git dir (git) or .jj dir (jj)
-    pub colocated_git_host: Option<PathBuf>, // .git for colocated jj+git repos
-    pub gitconfig_host: PathBuf,             // ~/.gitconfig
-    pub ssh_host: PathBuf,                   // ~/.ssh
+    pub vcs_host: PathBuf,                    // .git dir (git) or .jj dir (jj)
+    pub colocated_git_host: Option<PathBuf>,  // .git for colocated jj+git repos
+    pub gitconfig_host: PathBuf,              // .am/gitconfig (or override)
+    pub ssh_host: PathBuf,                    // ~/.ssh
     pub agent_auth: Vec<AgentAuthMount>,
 }
 
@@ -140,7 +140,7 @@ pub fn resolve_mounts(
     };
     let gitconfig_host = gitconfig
         .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| home.join(".gitconfig"));
+        .unwrap_or_else(|| repo_root.join(".am").join("gitconfig"));
     let ssh_host = ssh
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| home.join(".ssh"));
@@ -585,7 +585,7 @@ mod tests {
 
         assert_eq!(mounts.worktree_host, repo_root.join(".am/worktrees/feat"));
         assert_eq!(mounts.vcs_host, repo_root.join(".git"));
-        assert_eq!(mounts.gitconfig_host, tmp.path().join(".gitconfig"));
+        assert_eq!(mounts.gitconfig_host, repo_root.join(".am/gitconfig"));
         assert_eq!(mounts.ssh_host, tmp.path().join(".ssh"));
         assert!(mounts.agent_auth.is_empty());
 

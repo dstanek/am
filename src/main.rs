@@ -57,6 +57,17 @@ fn cmd_init() -> anyhow::Result<()> {
         println!("Created .am/sessions.json");
     }
 
+    let gitconfig_path = am_dir.join("gitconfig");
+    if !gitconfig_path.exists() {
+        let name = read_git_config("user.name").unwrap_or_default();
+        let email = read_git_config("user.email").unwrap_or_default();
+        let content = format!("[user]\n\tname = {name}\n\temail = {email}\n");
+        std::fs::write(&gitconfig_path, content)?;
+        println!("Created .am/gitconfig");
+    } else {
+        println!(".am/gitconfig already exists, skipping");
+    }
+
     let gitignore_path = repo_root.join(".gitignore");
     let already_ignored = if gitignore_path.exists() {
         let content = std::fs::read_to_string(&gitignore_path)?;
@@ -422,6 +433,18 @@ fn cmd_generate_config() -> anyhow::Result<()> {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
+
+fn read_git_config(key: &str) -> Option<String> {
+    std::process::Command::new("git")
+        .args(["config", "--global", key])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
 
 fn find_repo_root() -> anyhow::Result<PathBuf> {
     let mut dir = std::env::current_dir()?;
