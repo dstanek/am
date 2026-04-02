@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use git2::{BranchType, Repository, WorktreeAddOptions};
 
+use crate::command;
 use crate::config::Vcs;
 use crate::error::AmError;
 
@@ -84,19 +85,8 @@ fn jj_bin() -> Result<PathBuf> {
 /// Run a `jj` subcommand with the given args, returning an error on non-zero exit.
 fn run_jj(args: &[&str]) -> Result<()> {
     let bin = jj_bin()?;
-    let output = std::process::Command::new(&bin)
-        .args(args)
-        .output()
-        .map_err(|e| AmError::WorktreeError(format!("failed to run jj: {e}")))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(AmError::WorktreeError(if stderr.is_empty() {
-            format!("jj exited with status {}", output.status)
-        } else {
-            stderr
-        }).into());
-    }
-    Ok(())
+    let bin_str = bin.to_string_lossy();
+    command::run_command(&bin_str, args, AmError::WorktreeError)
 }
 
 /// Create a jj workspace for `slug` at `<repo-root>/.am/worktrees/<slug>`.

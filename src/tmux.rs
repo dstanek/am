@@ -2,6 +2,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
+use crate::command;
 use crate::config::SplitDirection;
 use crate::error::AmError;
 
@@ -11,39 +12,11 @@ fn tmux_bin() -> String {
 }
 
 fn run_tmux(args: &[&str]) -> Result<()> {
-    let output = std::process::Command::new(tmux_bin())
-        .args(args)
-        .output()
-        .map_err(|e| AmError::TmuxError(format!("failed to run tmux: {e}")))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(AmError::TmuxError(if stderr.is_empty() {
-            format!("tmux exited with status {}", output.status)
-        } else {
-            stderr
-        })
-        .into());
-    }
-    Ok(())
+    command::run_command(&tmux_bin(), args, AmError::TmuxError)
 }
 
 fn run_tmux_output(args: &[&str]) -> Result<String> {
-    let output = std::process::Command::new(tmux_bin())
-        .args(args)
-        .output()
-        .map_err(|e| AmError::TmuxError(format!("failed to run tmux: {e}")))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(AmError::TmuxError(if stderr.is_empty() {
-            format!("tmux exited with status {}", output.status)
-        } else {
-            stderr
-        })
-        .into());
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    command::run_command_output(&tmux_bin(), args, AmError::TmuxError)
 }
 
 /// Returns `true` if the `$TMUX` environment variable is set (i.e. we are
