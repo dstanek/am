@@ -13,18 +13,19 @@ pub struct SessionContainer {
     pub container_id: Option<String>,
 }
 
+/// VCS-specific metadata for a session (git branch and worktree path).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Session {
-    pub slug: String,
+pub struct VcsMetadata {
     pub branch: String,
     pub worktree_path: PathBuf,
+}
+
+/// Tmux-specific metadata for a session (window and pane names, original state).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TmuxMetadata {
     pub tmux_window: String,
     pub agent_pane: String,
     pub shell_pane: String,
-    pub created_at: DateTime<Utc>,
-    pub container: Option<SessionContainer>,
-    #[serde(default)]
-    pub auto: bool,
     /// The window name before `am start` renamed it (new-style sessions only).
     /// `None` for old-style sessions that owned a dedicated window.
     #[serde(default)]
@@ -33,6 +34,22 @@ pub struct Session {
     /// Used to restore the directory when the session is destroyed.
     #[serde(default)]
     pub original_shell_dir: Option<PathBuf>,
+}
+
+/// A session represents an agent's isolated environment with VCS, Tmux, and optional container.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Session {
+    pub slug: String,
+    pub created_at: DateTime<Utc>,
+    #[serde(default)]
+    pub auto: bool,
+    /// VCS-related metadata (branch, worktree path).
+    #[serde(flatten)]
+    pub vcs: VcsMetadata,
+    /// Tmux-related metadata (window, pane names, original state).
+    #[serde(flatten)]
+    pub tmux: TmuxMetadata,
+    pub container: Option<SessionContainer>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -100,16 +117,20 @@ mod tests {
     fn make_session(slug: &str) -> Session {
         Session {
             slug: slug.to_string(),
-            branch: format!("am/{slug}"),
-            worktree_path: PathBuf::from(format!(".am/worktrees/{slug}")),
-            tmux_window: format!("am-{slug}"),
-            agent_pane: format!("am-{slug}.1"),
-            shell_pane: format!("am-{slug}.0"),
             created_at: Utc::now(),
-            container: None,
             auto: false,
-            original_window_name: None,
-            original_shell_dir: None,
+            vcs: VcsMetadata {
+                branch: format!("am/{slug}"),
+                worktree_path: PathBuf::from(format!(".am/worktrees/{slug}")),
+            },
+            tmux: TmuxMetadata {
+                tmux_window: format!("am-{slug}"),
+                agent_pane: format!("am-{slug}.1"),
+                shell_pane: format!("am-{slug}.0"),
+                original_window_name: None,
+                original_shell_dir: None,
+            },
+            container: None,
         }
     }
 
@@ -130,7 +151,7 @@ mod tests {
         assert_eq!(sessions.len(), 1);
         let found = find_session(&sessions, "feat").unwrap();
         assert_eq!(found.slug, "feat");
-        assert_eq!(found.branch, "am/feat");
+        assert_eq!(found.vcs.branch, "am/feat");
     }
 
     #[test]

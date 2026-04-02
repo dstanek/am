@@ -248,16 +248,20 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
 
     let new_session = session::Session {
         slug: slug.to_string(),
-        branch: format!("am/{slug}"),
-        worktree_path: worktree_path.clone(),
-        tmux_window: window_name,
-        agent_pane: format!("am-{slug}.1"),
-        shell_pane: format!("am-{slug}.0"),
         created_at: chrono::Utc::now(),
-        container: session_container,
         auto,
-        original_window_name,
-        original_shell_dir,
+        vcs: session::VcsMetadata {
+            branch: format!("am/{slug}"),
+            worktree_path: worktree_path.clone(),
+        },
+        tmux: session::TmuxMetadata {
+            tmux_window: window_name,
+            agent_pane: format!("am-{slug}.1"),
+            shell_pane: format!("am-{slug}.0"),
+            original_window_name,
+            original_shell_dir,
+        },
+        container: session_container,
     };
     session::add_session(&repo_root, new_session)?;
 
@@ -282,7 +286,7 @@ fn cmd_list() -> anyhow::Result<()> {
     }
 
     let slug_w = sessions.iter().map(|s| s.slug.len()).max().unwrap_or(4).max(4);
-    let path_w = sessions.iter().map(|s| s.worktree_path.display().to_string().len()).max().unwrap_or(8).max(8);
+    let path_w = sessions.iter().map(|s| s.vcs.worktree_path.display().to_string().len()).max().unwrap_or(8).max(8);
 
     println!(
         "{:<slug_w$}  {:<9}  {:<4}  {:<path_w$}  {:<10}  CREATED",
@@ -299,8 +303,8 @@ fn cmd_list() -> anyhow::Result<()> {
             s.slug,
             container,
             auto,
-            s.worktree_path.display(),
-            s.tmux_window,
+            s.vcs.worktree_path.display(),
+            s.tmux.tmux_window,
             created,
         );
     }
@@ -329,11 +333,11 @@ fn cmd_attach(slug: &str) -> anyhow::Result<()> {
             config::global_config_path().as_deref(),
             Some(&project_config_path),
         )?;
-        tmux::create_window(&window_name, &s.worktree_path)
+        tmux::create_window(&window_name, &s.vcs.worktree_path)
             .map_err(|e| anyhow::anyhow!(
                 "{e}\nHint: a window named '{window_name}' may already exist — run 'am destroy {slug}' first"
             ))?;
-        tmux::split_window(&window_name, &s.worktree_path, &cfg.tmux.split)?;
+        tmux::split_window(&window_name, &s.vcs.worktree_path, &cfg.tmux.split)?;
         tmux::select_pane(&tmux::get_pane_id(&window_name, 0))?;
         tmux::select_window(&window_name)?;
         println!("Opened new window for session '{slug}'.");
@@ -356,8 +360,8 @@ fn cmd_run(slug: &str, agent: &str) -> anyhow::Result<()> {
         return Err(error::AmError::NotInTmux.into());
     }
 
-    tmux::send_keys(&s.agent_pane, agent)?;
-    tmux::select_window(&s.tmux_window)?;
+    tmux::send_keys(&s.tmux.agent_pane, agent)?;
+    tmux::select_window(&s.tmux.tmux_window)?;
     println!("Launched '{agent}' in session '{slug}'.");
     Ok(())
 }
@@ -377,7 +381,7 @@ fn cmd_destroy(slug: &str, force: bool) -> anyhow::Result<()> {
         let vcs_check = worktree::detect_vcs(&repo_root).unwrap_or(config::Vcs::Git);
         if matches!(vcs_check, config::Vcs::Git) {
             if let Some(s) = session::find_session(&sessions, slug) {
-                if worktree::git_worktree_has_changes(&s.worktree_path) {
+                if worktree::git_worktree_has_changes(&s.vcs.worktree_path) {
                     eprintln!("\x1b[31mWarning: the worktree has uncommitted changes that will be lost.\x1b[0m");
                 }
             }
@@ -408,18 +412,18 @@ fn cmd_destroy(slug: &str, force: bool) -> anyhow::Result<()> {
 
     // Clean up the tmux window (ignore errors — window/pane may not exist)
     if let Some(s) = session::find_session(&sessions, slug) {
-        if s.original_window_name.is_some() {
+        if s.tmux.original_window_name.is_some() {
             // New-style session: cd shell pane back, kill agent pane, restore window name.
-            if let Some(ref orig_dir) = s.original_shell_dir {
-                let _ = tmux::send_keys(&s.shell_pane, &format!("cd '{}'", orig_dir.display()));
+            if let Some(ref orig_dir) = s.tmux.original_shell_dir {
+                let _ = tmux::send_keys(&s.tmux.shell_pane, &format!("cd '{}'", orig_dir.display()));
             }
-            let _ = tmux::kill_pane(&s.agent_pane);
-            if let Some(ref orig) = s.original_window_name {
-                let _ = tmux::rename_window(Some(&s.tmux_window), orig);
+            let _ = tmux::kill_pane(&s.tmux.agent_pane);
+            if let Some(ref orig) = s.tmux.original_window_name {
+                let _ = tmux::rename_window(Some(&s.tmux.tmux_window), orig);
             }
         } else {
             // Old-style session: the window was dedicated, kill it entirely.
-            let _ = tmux::kill_window(&s.tmux_window);
+            let _ = tmux::kill_window(&s.tmux.tmux_window);
         }
     }
 
