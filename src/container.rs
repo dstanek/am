@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::config::{NetworkMode, RuntimePreference, Vcs};
 use crate::error::AmError;
@@ -117,7 +117,9 @@ fn mount_str(host: &Path, container: &str, mode: MountMode, selinux: bool) -> St
 fn home_dir() -> Result<PathBuf> {
     std::env::var("HOME")
         .map(PathBuf::from)
-        .map_err(|_| AmError::ConfigError("HOME env var not set".to_string()).into())
+        .with_context(|| "HOME environment variable not set — cannot resolve user home directory for mounts")?
+        .canonicalize()
+        .with_context(|| "failed to resolve HOME path — does the directory exist and is it accessible?")
 }
 
 pub fn resolve_mounts(
@@ -225,13 +227,14 @@ fn get_gh_token() -> Result<String> {
     let output = std::process::Command::new("gh")
         .args(["auth", "token"])
         .output()
-        .map_err(|e| AmError::ConfigError(format!("failed to run 'gh auth token': {e}")))?;
+        .with_context(|| "failed to execute 'gh auth token' — is GitHub CLI installed?")?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(AmError::ConfigError(format!(
-            "gh auth token failed — make sure you are authenticated with 'gh auth login': {stderr}"
+        return Err(anyhow::anyhow!(
+            "GitHub CLI authentication failed — run 'gh auth login' to authenticate\n\
+             Error: {stderr}"
         ))
-        .into());
+        .with_context(|| "retrieving GitHub authentication token for Copilot");
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
@@ -271,12 +274,15 @@ pub fn validate_agent(agent: &str) -> Result<()> {
 
     for path in &required {
         if !path.exists() {
-            return Err(AmError::ConfigError(format!(
-                "agent '{label}' requires {path} to exist on the host — \
-                 make sure {label} is installed and authenticated",
-                path = path.display(),
+            return Err(anyhow::anyhow!(
+                "agent '{label}' requires directory to exist: {path}\n\
+                 Make sure {label} is installed and authenticated on this system",
+                path = path.display()
             ))
-            .into());
+            .with_context(|| format!(
+                "checking agent credentials for '{label}' at {}",
+                path.display()
+            ));
         }
     }
     Ok(())
