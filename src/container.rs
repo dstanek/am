@@ -5,6 +5,14 @@ use anyhow::Result;
 use crate::config::{NetworkMode, RuntimePreference, Vcs};
 use crate::error::AmError;
 
+// Path handling strategy (preserve type safety as long as possible):
+// - Keep as Path/PathBuf in internal code
+// - Use &Path in function parameters (not &str)
+// - Convert to String only at boundaries (Command args, logging, display)
+// - Prefer .display() for format strings (never panics, handles UTF-8)
+// - Use .to_string_lossy() only when String ownership is needed
+// - Use .to_str()? only for critical UTF-8 requirements with error handling
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
@@ -325,30 +333,27 @@ pub fn build_run_command(
     }
 
     // Worktree mount — same path inside the container as on the host
-    let worktree_str = mounts.worktree_host.to_string_lossy();
     cmd.push("-v".to_string());
     cmd.push(mount_str(
         &mounts.worktree_host,
-        &worktree_str,
+        &mounts.worktree_host.to_string_lossy(),
         MountMode::ReadWrite,
         selinux,
     ));
 
     // VCS dir mount — same path inside the container as on the host
-    let vcs_str = mounts.vcs_host.to_string_lossy();
     cmd.push("-v".to_string());
     cmd.push(mount_str(
         &mounts.vcs_host,
-        &vcs_str,
+        &mounts.vcs_host.to_string_lossy(),
         MountMode::ReadWrite,
         selinux,
     ));
 
     // Colocated jj+git: mount the git object store alongside .jj
     if let Some(ref git) = mounts.colocated_git_host {
-        let git_str = git.to_string_lossy();
         cmd.push("-v".to_string());
-        cmd.push(mount_str(git, &git_str, MountMode::ReadWrite, selinux));
+        cmd.push(mount_str(git, &git.to_string_lossy(), MountMode::ReadWrite, selinux));
     }
 
     // ~/.gitconfig — only mount if the file exists
@@ -406,7 +411,7 @@ pub fn build_run_command(
 
     // Working directory — same as worktree host path
     cmd.push("--workdir".to_string());
-    cmd.push(worktree_str.into_owned());
+    cmd.push(mounts.worktree_host.to_string_lossy().into_owned());
 
     cmd.push(image.to_string());
     cmd

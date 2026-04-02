@@ -42,6 +42,28 @@ make build-copilot       # Build Copilot Docker image
 
 **After every code change:** run `cargo test` and `cargo clippy -- -D warnings`. Fix any failures before proceeding.
 
+## Path Handling Strategy
+
+Preserve type safety as long as possible by keeping Path/PathBuf/OsStr until converting to String is absolutely necessary:
+
+**Hierarchy (in order of preference):**
+1. `Path`/`PathBuf`/`OsStr` — Keep internal code type-safe (no early conversion)
+2. `&Path` / `&OsStr` — Use in function parameters (not `&str`)
+3. `.as_path()` / `.as_os_str()` — Borrow without copying
+4. `.display()` — For format strings in logging/printing (never panics, handles UTF-8)
+5. `.to_string_lossy()` — When `Cow<str>` or owned `String` is needed (command args, mounting)
+6. `.to_str()?` — Only for critical UTF-8 requirements with proper error handling
+7. `String` — Last resort (owned copy)
+
+**Practical rules:**
+- ✅ `fn foo(path: &Path)` — NOT `fn foo(path: &str)`
+- ✅ Use `.display()` for error messages and logging
+- ✅ Convert to String only at boundaries (Command args, container mounts)
+- ✅ Inline conversions: `cmd.arg(path.to_string_lossy())` rather than intermediate variables
+- ❌ Don't convert early: avoid `let path_str = path.to_string_lossy(); ... use later`
+
+This approach improves type safety, clarity (conversions are visible at call sites), and performance (fewer allocations).
+
 ## Version Control
 
 Use `jj` commands (not `git`). Commits use **Conventional Commits**: `type(scope): description`.

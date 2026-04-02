@@ -6,6 +6,13 @@ use crate::command;
 use crate::config::SplitDirection;
 use crate::error::AmError;
 
+// Path handling strategy (preserve type safety as long as possible):
+// - Keep as Path/PathBuf in internal code
+// - Use &Path in function parameters (not &str)
+// - Convert to String only at boundaries (Command args, logging, display)
+// - Prefer .to_string_lossy() for command arguments (handles UTF-8 gracefully)
+// - Use .display() for logging/error messages (implements Display trait)
+
 /// Returns the tmux binary to use. Tests can override via `AM_TMUX_BIN`.
 fn tmux_bin() -> String {
     std::env::var("AM_TMUX_BIN").unwrap_or_else(|_| "tmux".to_string())

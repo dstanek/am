@@ -7,6 +7,13 @@ use crate::command;
 use crate::config::Vcs;
 use crate::error::AmError;
 
+// Path handling strategy (preserve type safety as long as possible):
+// - Keep as Path/PathBuf in internal code
+// - Use &Path in function parameters (not &str)
+// - Convert to String only at boundaries (Command args, logging, display)
+// - Prefer .to_string_lossy() for command arguments (handles UTF-8 gracefully)
+// - Use .display() for logging/error messages (implements Display trait)
+
 /// Detect which VCS the directory at `repo_root` uses.
 pub fn detect_vcs(repo_root: &Path) -> Result<Vcs> {
     if repo_root.join(".jj").exists() {
