@@ -48,7 +48,7 @@ am start <slug> [OPTIONS]
 
 | Option | Description |
 |---|---|
-| `--agent <AGENT>` | Agent command to launch in the session's agent pane. Overrides the `agent` value from config. Must be one of the built-in agent integrations: `claude`, `copilot`, `gemini`, `codex`, `aider`. |
+| `--agent <AGENT>` | Agent command to launch in the session's agent pane. Overrides the `agent` value from config. Currently supported: `claude`, `copilot`. See [Concepts](../concepts.md#agent-integrations) for available agents. |
 | `--no-container` | Disable container isolation for this session. The agent command will run directly in the tmux pane instead of inside a container. |
 
 **What it does**

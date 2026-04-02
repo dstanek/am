@@ -146,14 +146,14 @@ am start feat --team --agent claude   # future
 
 `am` has built-in **agent integrations** for the most popular coding agents. Activating an integration (via `defaults.agent` in config or `--agent` on the command line) tells `am` to automatically mount that agent's credentials from your host into the container at runtime. The agent selection also determines the container image — `am` ships with built-in image defaults for `claude` and `copilot`, and you can configure images for any agent under `[agents.<name>]`.
 
-| Agent | What gets mounted |
-|---|---|
-| `claude` | `~/.claude` → `/root/.claude` (read-only) |
-| `copilot` | `~/.config/gh` and `~/.config/github-copilot` → `/root/...` (read-only) |
-| `gemini` | `~/.gemini` → `/root/.gemini` (read-only) |
-| `codex` | no mount — passes `OPENAI_API_KEY` from the environment |
-| `aider` | no mount — passes `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` from the environment |
+| Agent | What gets mounted | Status |
+|---|---|---|
+| `claude` | `~/.claude` → `/root/.claude` (read-only) | ✓ Supported |
+| `copilot` | `~/.config/gh` and `~/.config/github-copilot` → `/root/...` (read-only) | ✓ Supported |
 
 Credentials are **never baked into the container image** — they come from your host at session start and are mounted read-only. This means you can share a container image across machines or teammates without embedding any secrets.
 
 The agent is also launched automatically inside the container after it starts (with a configurable startup delay), so you don't need to type the agent command yourself.
+
+!!! note "Future agent support"
+    Support for additional agents (Gemini, Codex, Aider, and others) is planned for upcoming releases. Check the [project roadmap](https://github.com/dstanek/am/issues) for status updates.

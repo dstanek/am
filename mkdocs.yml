@@ -43,13 +43,16 @@ nav:
   - Home: index.md
   - Getting Started:
     - Installation: getting-started/installation.md
-    - Concepts: concepts.md
     - Quick Start: getting-started/quick-start.md
+    - Concepts: concepts.md
   - Guides:
     - Claude Code: guides/claude-code.md
     - GitHub Copilot: guides/github-copilot.md
     - Custom Images: guides/custom-images.md
+    - Troubleshooting: guides/troubleshooting.md
+    - CI/CD Integration: guides/ci-cd-integration.md
   - Reference:
+    - Quick Reference: reference/quick-reference.md
     - Commands: reference/commands.md
     - Configuration: reference/configuration.md
     - Commit Trailers: reference/commit-trailers.md

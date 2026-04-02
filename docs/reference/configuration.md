@@ -68,9 +68,16 @@ Environment variables override both the global and project configs and are usefu
 | `AM_TMUX_SPLIT_PERCENT` | `tmux.split_percent` | integer 1–99 | `AM_TMUX_SPLIT_PERCENT=30` |
 | `AM_CONTAINER_ENABLED` | `container.enabled` | `true`/`1`/`yes`, `false`/`0`/`no` | `AM_CONTAINER_ENABLED=false` |
 | `AM_CONTAINER_RUNTIME` | `container.runtime` | `auto`, `podman`, `docker` | `AM_CONTAINER_RUNTIME=docker` |
-| `AM_CONTAINER_IMAGE` | `container.image` | any non-empty string | `AM_CONTAINER_IMAGE=my-image:latest` — overrides the image for all agents |
+| `AM_CONTAINER_AGENT` | `container.agent` | any non-empty string | `AM_CONTAINER_AGENT=claude` |
+| `AM_CONTAINER_IMAGE` | `container.image` | any non-empty string | `AM_CONTAINER_IMAGE=my-image:latest` |
 | `AM_CONTAINER_NETWORK` | `container.network` | `full`, `none` | `AM_CONTAINER_NETWORK=none` |
+| `AM_CONTAINER_GITCONFIG` | `container.gitconfig` | directory path | `AM_CONTAINER_GITCONFIG=/custom/.gitconfig` |
+| `AM_CONTAINER_SSH` | `container.ssh` | directory path | `AM_CONTAINER_SSH=/custom/.ssh` |
 | `AM_CONTAINER_STARTUP_DELAY_MS` | `container.startup_delay_ms` | non-negative integer | `AM_CONTAINER_STARTUP_DELAY_MS=1000` |
+| `CLAUDE_CONFIG_DIR` | (none) | directory path | `CLAUDE_CONFIG_DIR=/custom/.claude` |
+
+!!! note "Mount path customization"
+    The `AM_CONTAINER_GITCONFIG` and `AM_CONTAINER_SSH` variables allow you to override where `am` looks for your git and SSH configuration on the host, and where they are mounted inside the container. `CLAUDE_CONFIG_DIR` allows you to override the Claude configuration directory location. These are rarely needed unless you have a non-standard directory structure.
 
 ---
 
