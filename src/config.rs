@@ -59,6 +59,7 @@ pub struct AgentSettings {
 pub struct TmuxConfig {
     pub agent_pane: PaneSide,
     pub split: SplitDirection,
+    #[serde(deserialize_with = "deserialize_split_percent", serialize_with = "serialize_split_percent")]
     pub split_percent: u8,
 }
 
@@ -70,6 +71,26 @@ impl Default for TmuxConfig {
             split_percent: 50,
         }
     }
+}
+
+fn deserialize_split_percent<'de, D>(deserializer: D) -> std::result::Result<u8, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let val = u8::deserialize(deserializer)?;
+    if !(1..=99).contains(&val) {
+        return Err(serde::de::Error::custom(
+            "split_percent must be between 1 and 99 (percentage of window for agent pane)"
+        ));
+    }
+    Ok(val)
+}
+
+fn serialize_split_percent<S>(value: &u8, serializer: S) -> std::result::Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_u8(*value)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -376,7 +397,11 @@ fn apply_env_vars(config: &mut Config) {
     }
     if let Ok(val) = std::env::var("AM_TMUX_SPLIT_PERCENT") {
         if let Ok(n) = val.parse::<u8>() {
-            config.tmux.split_percent = n;
+            if (1..=99).contains(&n) {
+                config.tmux.split_percent = n;
+            } else {
+                eprintln!("warning: AM_TMUX_SPLIT_PERCENT must be 1-99, ignoring value {n}");
+            }
         }
     }
     if let Ok(val) = std::env::var("AM_CONTAINER_ENABLED") {
