@@ -13,7 +13,8 @@ RUN apt-get update && apt-get install -y \
 # Ubuntu 25.10+ ships with an 'ubuntu' user at UID 1000; remove it and create 'am' instead
 RUN userdel -r ubuntu 2>/dev/null || true \
  && useradd -m -u 1000 -s /bin/bash am \
- && mkdir -p /workspace && chown am:am /workspace
+ && mkdir -p /home/am/.config /workspace \
+ && chown -R am:am /home/am/.config /workspace
 
 USER am
 ENV HOME=/home/am
