@@ -1,3 +1,45 @@
+## [0.3.0] - 2026-04-11
+
+### 🚀 Features
+
+- *(docker)* Add minimal images, example Dockerfiles, and publish both
+- *(config)* Make gitconfig and ssh mount paths configurable
+- *(container)* Skip mounting config files that don't exist on the host
+- *(init,container)* Scaffold .am/gitconfig and mount it in containers
+- *(start)* Require am init before starting a container session
+- *(container)* Inject GH_TOKEN for Copilot agent via gh CLI
+- *(tmux)* Cd shell pane into worktree on start, restore on destroy
+- *(config)* Tie container image selection to agent name
+
+### 🐛 Bug Fixes
+
+- *(config)* Use fully qualified minimal image as default
+- *(config)* Remove unnecessary unsafe blocks from env var calls in tests
+- *(tmux,container)* Replace to_str().unwrap_or() with to_string_lossy()
+- *(config)* Validate split_percent is in range 1-99
+- *(container)* Improve error messages and use anyhow::Context for richer errors
+- *(docker)* Pre-create ~/.config with correct ownership
+
+### 💼 Other
+
+- Add release profile optimizations for smaller binary size
+
+### 🚜 Refactor
+
+- Extract shared command execution logic into command module
+- *(config)* Extract apply_opt helpers to reduce repetition in apply_file_config
+- *(tmux)* Remove unused create_window_with_shell_cmd function
+- *(session)* Split Session struct into VcsMetadata and TmuxMetadata sub-structs
+- *(worktree)* Replace git2 library with git CLI subprocess calls
+
+### 📚 Documentation
+
+- Document path handling strategy in CLAUDE.md and source modules
+- Add FAQ, troubleshooting, CI/CD integration, and quick-reference guides
+
+### ⚙️ Miscellaneous Tasks
+
+- *(docker)* Switch Claude image to native installer
 ## [0.2.0] - 2026-04-01
 
 ### 🚀 Features
@@ -45,6 +87,7 @@
 
 - Update repo references from dstanek/am to dstanek/agent-manager
 - *(ci)* Add Clippy lint enforcement
+- *(release)* V0.2.0
 ## [0.1.2] - 2026-03-28
 
 ### 🐛 Bug Fixes
