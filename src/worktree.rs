@@ -37,7 +37,8 @@ fn git_bin() -> Result<PathBuf> {
 fn run_git(repo_root: &Path, args: &[&str]) -> Result<()> {
     let bin = git_bin()?;
     let bin_str = bin.to_string_lossy();
-    let mut full_args = vec!["-C", repo_root.to_str().unwrap_or("."), "--no-pager"];
+    let root_str = repo_root.to_string_lossy();
+    let mut full_args = vec!["-C", root_str.as_ref(), "--no-pager"];
     full_args.extend_from_slice(args);
     run_command(&bin_str, &full_args, AmError::WorktreeError)
 }
@@ -46,7 +47,8 @@ fn run_git(repo_root: &Path, args: &[&str]) -> Result<()> {
 fn run_git_output(repo_root: &Path, args: &[&str]) -> Result<String> {
     let bin = git_bin()?;
     let bin_str = bin.to_string_lossy();
-    let mut full_args = vec!["-C", repo_root.to_str().unwrap_or("."), "--no-pager"];
+    let root_str = repo_root.to_string_lossy();
+    let mut full_args = vec!["-C", root_str.as_ref(), "--no-pager"];
     full_args.extend_from_slice(args);
     run_command_output(&bin_str, &full_args, AmError::WorktreeError)
 }
