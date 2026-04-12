@@ -3,19 +3,8 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 use crate::command::{run_command, run_command_output};
-use crate::config::Vcs;
 use crate::error::AmError;
 
-/// Detect which VCS the directory at `repo_root` uses.
-pub fn detect_vcs(repo_root: &Path) -> Result<Vcs> {
-    if repo_root.join(".jj").exists() {
-        Ok(Vcs::Jj)
-    } else if repo_root.join(".git").exists() {
-        Ok(Vcs::Git)
-    } else {
-        Err(AmError::NotInRepo.into())
-    }
-}
 
 /// Resolve the `git` binary path, respecting the `AM_GIT_BIN` env override.
 fn git_bin() -> Result<PathBuf> {
@@ -210,34 +199,6 @@ mod tests {
             .unwrap();
     }
 
-    #[test]
-    fn detect_vcs_returns_git_for_git_repo() {
-        let tmp = TempDir::new().unwrap();
-        std::fs::create_dir(tmp.path().join(".git")).unwrap();
-        assert_eq!(detect_vcs(tmp.path()).unwrap(), Vcs::Git);
-    }
-
-    #[test]
-    fn detect_vcs_returns_jj_for_jj_repo() {
-        let tmp = TempDir::new().unwrap();
-        std::fs::create_dir(tmp.path().join(".jj")).unwrap();
-        assert_eq!(detect_vcs(tmp.path()).unwrap(), Vcs::Jj);
-    }
-
-    #[test]
-    fn detect_vcs_prefers_jj_when_both_present() {
-        let tmp = TempDir::new().unwrap();
-        std::fs::create_dir(tmp.path().join(".git")).unwrap();
-        std::fs::create_dir(tmp.path().join(".jj")).unwrap();
-        assert_eq!(detect_vcs(tmp.path()).unwrap(), Vcs::Jj);
-    }
-
-    #[test]
-    fn detect_vcs_errors_when_no_repo() {
-        let tmp = TempDir::new().unwrap();
-        let err = detect_vcs(tmp.path()).unwrap_err();
-        assert!(err.to_string().contains("repository"));
-    }
 
     // ── jj helpers ────────────────────────────────────────────────────────────
 

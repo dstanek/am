@@ -39,7 +39,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
 // ── am init ───────────────────────────────────────────────────────────────────
 
 fn cmd_init() -> anyhow::Result<()> {
-    let repo_root = find_repo_root()?;
+    let (repo_root, _) = find_repo_root()?;
 
     let am_dir = repo_root.join(".am");
     std::fs::create_dir_all(&am_dir)?;
@@ -92,7 +92,7 @@ fn cmd_init() -> anyhow::Result<()> {
 // ── am start ──────────────────────────────────────────────────────────────────
 
 fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: bool) -> anyhow::Result<()> {
-    let repo_root = find_repo_root()?;
+    let (repo_root, vcs) = find_repo_root()?;
     let sessions = session::load_sessions(&repo_root)?;
 
     if session::find_session(&sessions, slug).is_some() {
@@ -114,8 +114,7 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
 
     // ── Early validation (fail before any side effects) ───────────────────────
 
-    // 1. VCS
-    let vcs = worktree::detect_vcs(&repo_root)?;
+    // 1. VCS (already resolved by find_repo_root)
 
     // 2. Auto mode constraints
     if auto && no_container {
@@ -282,7 +281,7 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
 // ── am list ───────────────────────────────────────────────────────────────────
 
 fn cmd_list() -> anyhow::Result<()> {
-    let repo_root = find_repo_root()?;
+    let (repo_root, _) = find_repo_root()?;
     let sessions = session::load_sessions(&repo_root)?;
 
     if sessions.is_empty() {
@@ -319,7 +318,7 @@ fn cmd_list() -> anyhow::Result<()> {
 // ── am attach ────────────────────────────────────────────────────────────────
 
 fn cmd_attach(slug: &str) -> anyhow::Result<()> {
-    let repo_root = find_repo_root()?;
+    let (repo_root, _) = find_repo_root()?;
     let sessions = session::load_sessions(&repo_root)?;
 
     let s = session::find_session(&sessions, slug)
@@ -355,7 +354,7 @@ fn cmd_attach(slug: &str) -> anyhow::Result<()> {
 // ── am run ────────────────────────────────────────────────────────────────────
 
 fn cmd_run(slug: &str, agent: &str) -> anyhow::Result<()> {
-    let repo_root = find_repo_root()?;
+    let (repo_root, _) = find_repo_root()?;
     let sessions = session::load_sessions(&repo_root)?;
 
     let s = session::find_session(&sessions, slug)
@@ -374,7 +373,7 @@ fn cmd_run(slug: &str, agent: &str) -> anyhow::Result<()> {
 // ── am destroy ───────────────────────────────────────────────────────────────
 
 fn cmd_destroy(slug: &str, force: bool) -> anyhow::Result<()> {
-    let repo_root = find_repo_root()?;
+    let (repo_root, vcs) = find_repo_root()?;
     let sessions = session::load_sessions(&repo_root)?;
 
     if session::find_session(&sessions, slug).is_none() {
@@ -383,8 +382,7 @@ fn cmd_destroy(slug: &str, force: bool) -> anyhow::Result<()> {
 
     if !force {
         // Warn about uncommitted changes in git worktrees only.
-        let vcs_check = worktree::detect_vcs(&repo_root).unwrap_or(config::Vcs::Git);
-        if matches!(vcs_check, config::Vcs::Git) {
+        if matches!(vcs, config::Vcs::Git) {
             if let Some(s) = session::find_session(&sessions, slug) {
                 if worktree::git_worktree_has_changes(&s.vcs.worktree_path) {
                     eprintln!("\x1b[31mWarning: the worktree has uncommitted changes that will be lost.\x1b[0m");
@@ -435,7 +433,6 @@ fn cmd_destroy(slug: &str, force: bool) -> anyhow::Result<()> {
     // Remove worktree — fail hard so the session record is preserved if
     // cleanup fails (otherwise the workspace becomes untracked/orphaned).
     // Use --force to skip worktree removal and delete the session record anyway.
-    let vcs = worktree::detect_vcs(&repo_root).unwrap_or(config::Vcs::Git);
     let remove_result = match vcs {
         config::Vcs::Git => worktree::remove_git_worktree(slug, &repo_root),
         config::Vcs::Jj => worktree::remove_jj_workspace(slug, &repo_root),
@@ -486,19 +483,19 @@ fn read_git_config(key: &str) -> Option<String> {
 }
 
 
-fn find_repo_root() -> anyhow::Result<PathBuf> {
+fn find_repo_root() -> anyhow::Result<(PathBuf, config::Vcs)> {
     let mut dir = std::env::current_dir()?;
     loop {
-        // .git in a git worktree is a FILE pointing back to the main repo;
-        // only stop when we find it as a DIRECTORY (the actual repo root).
-        if dir.join(".git").is_dir() {
-            return Ok(dir);
-        }
-        // .jj exists in both the main repo and additional workspaces.
+        // .jj check first: colocated jj+git repos have both .jj and .git.
         // In the main repo, .jj/repo is a directory (the object store).
         // In a workspace, .jj/repo is a symlink — keep walking up.
         if dir.join(".jj").is_dir() && dir.join(".jj").join("repo").is_dir() {
-            return Ok(dir);
+            return Ok((dir, config::Vcs::Jj));
+        }
+        // .git in a git worktree is a FILE pointing back to the main repo;
+        // only stop when we find it as a DIRECTORY (the actual repo root).
+        if dir.join(".git").is_dir() {
+            return Ok((dir, config::Vcs::Git));
         }
         match dir.parent() {
             Some(parent) => dir = parent.to_path_buf(),
