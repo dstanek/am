@@ -151,10 +151,6 @@ Controls container lifecycle and what gets mounted or exposed inside the contain
 | `image` | string | `""` | Override image for all agents; takes priority over `[agents.<name>].image`; leave unset to use the per-agent default | Any valid image reference |
 | `network` | string | `"full"` | Network access mode for the container | `"full"` (unrestricted internet access), `"none"` (no network) |
 | `env` | list of strings | `[]` | Extra environment variables passed into the container from the host shell | e.g. `["ANTHROPIC_API_KEY", "FOO=bar"]` |
-| `startup_delay_ms` | integer | `500` | Milliseconds to wait after container start before sending the agent command to the pane | Any non-negative integer |
-
-!!! tip "Choosing `startup_delay_ms`"
-    The default 500 ms is usually enough for a pre-pulled image on a local machine. If you are pulling a large image or running on a slow host, increase this value (e.g. `startup_delay_ms = 2000`) to avoid sending the agent command before the container shell is ready.
 
 !!! note "Image selection"
     In most cases you do not need to set `container.image`. `am` resolves the image from the active agent via `[agents.<name>].image`, with built-in defaults for `claude` and `copilot`. Set `container.image` only when you want a single image to apply regardless of which agent is selected.

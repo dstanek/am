@@ -101,7 +101,6 @@ pub struct ContainerConfig {
     pub agent: Option<String>,
     pub network: NetworkMode,
     pub env: Vec<String>,
-    pub startup_delay_ms: u64,
     pub gitconfig: Option<PathBuf>, // None = ~/.gitconfig
     pub ssh: Option<PathBuf>,       // None = ~/.ssh
 }
@@ -115,7 +114,6 @@ impl Default for ContainerConfig {
             agent: None,
             network: NetworkMode::Full,
             env: Vec::new(),
-            startup_delay_ms: 500,
             gitconfig: None,
             ssh: None,
         }
@@ -199,7 +197,6 @@ struct FileContainer {
     agent: Option<String>,
     network: Option<NetworkMode>,
     env: Option<Vec<String>>,
-    startup_delay_ms: Option<u64>,
     gitconfig: Option<PathBuf>,
     ssh: Option<PathBuf>,
 }
@@ -256,7 +253,6 @@ fn apply_file_config(base: &mut Config, file: FileConfig) {
     apply_opt_string(&mut base.container.agent, file.container.agent);
     apply_opt(&mut base.container.network, file.container.network);
     apply_opt(&mut base.container.env, file.container.env);
-    apply_opt(&mut base.container.startup_delay_ms, file.container.startup_delay_ms);
     apply_opt_some(&mut base.container.gitconfig, file.container.gitconfig);
     apply_opt_some(&mut base.container.ssh, file.container.ssh);
 }
@@ -313,7 +309,6 @@ pub fn write_defaults(path: &Path) -> Result<()> {
 # runtime = "auto"       # "auto" | "podman" | "docker"
 # network = "full"       # "full" | "none"
 # env = []               # extra environment variables to pass into the container
-# startup_delay_ms = 500 # ms to wait after container start before sending the agent command
 # gitconfig = ""         # path to gitconfig to mount (default: ~/.gitconfig)
 # ssh = ""               # path to SSH dir to mount (default: ~/.ssh)
 # image = ""             # override image for all agents (advanced; prefer [agents.<name>].image)
@@ -333,7 +328,7 @@ pub fn global_config_template() -> &'static str {
 #   AM_VCS, AM_AGENT
 #   AM_TMUX_AGENT_PANE, AM_TMUX_SPLIT, AM_TMUX_SPLIT_PERCENT
 #   AM_CONTAINER_ENABLED, AM_CONTAINER_RUNTIME, AM_CONTAINER_IMAGE,
-#   AM_CONTAINER_AGENT, AM_CONTAINER_NETWORK, AM_CONTAINER_STARTUP_DELAY_MS
+#   AM_CONTAINER_AGENT, AM_CONTAINER_NETWORK
 
 [defaults]
 vcs = "git"            # "git" | "jj"
@@ -360,7 +355,6 @@ enabled = true
 runtime = "auto"       # "auto" (podman first, then docker) | "podman" | "docker"
 network = "full"       # "full" (unrestricted) | "none" (no network access)
 env = []               # extra environment variables passed into the container, e.g. ["FOO=bar"]
-startup_delay_ms = 500 # ms to wait after container start before sending the agent command
 # gitconfig = ""        # path to gitconfig to mount (default: ~/.gitconfig)
 # ssh = ""              # path to SSH dir to mount (default: ~/.ssh)
 # image = ""            # override image for all agents (advanced; prefer [agents.<name>].image above)
@@ -434,11 +428,6 @@ fn apply_env_vars(config: &mut Config) {
             "full" => config.container.network = NetworkMode::Full,
             "none" => config.container.network = NetworkMode::None,
             _ => {}
-        }
-    }
-    if let Ok(val) = std::env::var("AM_CONTAINER_STARTUP_DELAY_MS") {
-        if let Ok(n) = val.parse::<u64>() {
-            config.container.startup_delay_ms = n;
         }
     }
     if let Ok(val) = std::env::var("AM_CONTAINER_GITCONFIG") {
