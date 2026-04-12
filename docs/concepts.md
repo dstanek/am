@@ -99,12 +99,12 @@ The container is launched interactively in the agent pane — you can see its ou
 
 | Host path | Container path | Purpose |
 |---|---|---|
-| `.am/worktrees/<slug>` | `/workspace` | The agent's working directory |
-| `<repo-root>/.git` | `/mainrepo/.git` | Git history and ref store |
-| `~/.gitconfig` | `/root/.gitconfig` | Commit author identity |
-| `~/.ssh` | `/root/.ssh` | SSH keys for remote operations |
+| `.am/worktrees/<slug>` | same path as host | The agent's working directory |
+| `<repo-root>/.git` (git) or `<repo-root>/.jj` (jj) | same path as host | VCS history and ref store |
+| `~/.gitconfig` | `/home/am/.gitconfig` | Commit author identity |
+| `~/.ssh` | `/home/am/.ssh` | SSH keys for remote operations |
 
-For git repos, `am` also injects `GIT_DIR` and `GIT_WORK_TREE` environment variables so that git commands from `/workspace` correctly target the worktree branch.
+Paths are mirrored from the host so that absolute paths inside the container resolve correctly. The container runs as the host user (matched uid/gid), so bind-mounted files are readable and writable without permission issues.
 
 Container isolation can be disabled per-session with `--no-container`, or turned off by default in config with `container.enabled = false`.
 

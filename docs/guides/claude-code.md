@@ -119,7 +119,7 @@ am start feat --agent claude
 1. Create the `am/feat` git worktree (or jj workspace)
 2. Open a split-pane tmux window named `am-feat`
 3. Launch the container in the agent pane with all credential mounts
-4. After a brief startup pause, send `claude` to the agent pane to start Claude Code
+4. Send `claude` to the agent pane to start Claude Code
 
 ---
 
@@ -129,16 +129,16 @@ am start feat --agent claude
 
 | Host path | Container path | Mode |
 |---|---|---|
-| `.am/worktrees/<slug>` | `/workspace` | read-write |
-| `<repo-root>/.git` | `/mainrepo/.git` | read-write |
-| `~/.gitconfig` | `/root/.gitconfig` | read-only |
-| `~/.ssh` | `/root/.ssh` | read-only |
-| `~/.claude` | `/root/.claude` | read-only |
+| `.am/worktrees/<slug>` | same path as host | read-write |
+| `<repo-root>/.git` | same path as host | read-write |
+| `~/.gitconfig` | `/home/am/.gitconfig` | read-only |
+| `~/.ssh` | `/home/am/.ssh` | read-only |
+| `~/.claude` | `/home/am/.claude` | read-write |
 
-`am` also injects the `GIT_DIR` and `GIT_WORK_TREE` environment variables into the container so that `git` commands issued from `/workspace` operate correctly against the worktree. From inside the container, running `git status` or `git commit` will behave as if you are in a normal checkout of the `am/<slug>` branch.
+Paths are mirrored from the host so that absolute paths resolve correctly inside the container. The container runs as the host user (matched uid/gid) so bind-mounted files are readable and writable without permission issues.
 
 !!! note "jj repositories"
-    For jj repositories, `am` uses a different mount layout that mirrors the host path structure. `GIT_DIR`/`GIT_WORK_TREE` are not injected — jj does not use them. The container's working directory is still set to the worktree path.
+    For jj repositories, the `.jj` directory is mounted at the same host path instead of `.git`. Colocated jj+git repos mount both.
 
 ---
 
