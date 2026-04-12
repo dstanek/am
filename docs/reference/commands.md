@@ -48,8 +48,9 @@ am start <slug> [OPTIONS]
 
 | Option | Description |
 |---|---|
-| `--agent <AGENT>` | Agent command to launch in the session's agent pane. Overrides the `agent` value from config. Currently supported: `claude`, `copilot`. See [Concepts](../concepts.md#agent-integrations) for available agents. |
+| `--agent <AGENT>` | Agent command to launch in the session's agent pane. Overrides the `agent` value from config. Supported integrations: `claude`, `copilot`, `gemini`, `codex`. Any other value is treated as a raw executable with no credential mounts. See [Concepts](../concepts.md#agent-integrations) for details. |
 | `--no-container` | Disable container isolation for this session. The agent command will run directly in the tmux pane instead of inside a container. |
+| `--auto` | Launch the agent in autonomous mode (passes agent-specific flags to skip interactive prompts, e.g. `--dangerously-skip-permissions` for Claude). Requires `--agent` and container to be enabled. |
 
 **What it does**
 
@@ -57,7 +58,7 @@ am start <slug> [OPTIONS]
 2. Creates a git worktree at `.am/worktrees/<slug>` on a new `am/<slug>` branch (or a jj workspace if the repo uses jj)
 3. If inside tmux: opens a new window named `am-<slug>` with a split pane; sets up the agent pane and the shell pane
 4. If container is enabled: launches the container with the appropriate mounts and environment variables
-5. Sends the agent command to the agent pane after the configured startup delay
+5. Sends the agent command to the agent pane
 6. Records the session in `.am/sessions.json`
 
 If `am start` is run outside of tmux, it creates the worktree and then launches the container directly (replacing the current shell process via `exec()`). No tmux window is created.
