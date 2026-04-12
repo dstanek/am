@@ -9,13 +9,17 @@ use crate::error::AmError;
 /// Resolve the `git` binary path, respecting the `AM_GIT_BIN` env override.
 fn git_bin() -> Result<PathBuf> {
     if let Ok(path) = std::env::var("AM_GIT_BIN") {
-        let p = PathBuf::from(path);
+        let p = PathBuf::from(&path);
         if p.exists() {
             return Ok(p);
         }
-        return Err(AmError::WorktreeError(
-            "git binary not found (AM_GIT_BIN is set but does not exist)".to_string(),
-        )
+        // If AM_GIT_BIN is a binary name like "git", try to locate it on PATH.
+        if let Ok(found) = which::which(&path) {
+            return Ok(found);
+        }
+        return Err(AmError::WorktreeError(format!(
+            "git binary not found (AM_GIT_BIN is set to {path} but was not found)"
+        ))
         .into());
     }
     which::which("git")
@@ -86,13 +90,16 @@ pub fn create_git_worktree(slug: &str, repo_root: &Path) -> Result<PathBuf> {
 /// Resolve the `jj` binary path, respecting the `AM_JJ_BIN` env override.
 fn jj_bin() -> Result<PathBuf> {
     if let Ok(path) = std::env::var("AM_JJ_BIN") {
-        let p = PathBuf::from(path);
+        let p = PathBuf::from(&path);
         if p.exists() {
             return Ok(p);
         }
-        return Err(AmError::WorktreeError(
-            "jj binary not found (AM_JJ_BIN is set but does not exist)".to_string(),
-        )
+        if let Ok(found) = which::which(&path) {
+            return Ok(found);
+        }
+        return Err(AmError::WorktreeError(format!(
+            "jj binary not found (AM_JJ_BIN is set to {path} but was not found)"
+        ))
         .into());
     }
     which::which("jj").map_err(|_| {
