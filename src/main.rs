@@ -217,7 +217,7 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
         // cd the shell pane into the worktree.
         tmux::send_keys(
             &tmux::get_pane_id(&window_name, 0),
-            &format!("cd '{}'", worktree_path.display()),
+            &cd_cmd(&worktree_path),
         )?;
         // Keep focus on the shell pane (pane 0 — the original pane the user was in).
         tmux::select_pane(&tmux::get_pane_id(&window_name, 0))?;
@@ -415,7 +415,7 @@ fn cmd_destroy(slug: &str, force: bool) -> anyhow::Result<()> {
         if s.tmux.original_window_name.is_some() {
             // New-style session: cd shell pane back, kill agent pane, restore window name.
             if let Some(ref orig_dir) = s.tmux.original_shell_dir {
-                let _ = tmux::send_keys(&s.tmux.shell_pane, &format!("cd '{}'", orig_dir.display()));
+                let _ = tmux::send_keys(&s.tmux.shell_pane, &cd_cmd(orig_dir));
             }
             let _ = tmux::kill_pane(&s.tmux.agent_pane);
             if let Some(ref orig) = s.tmux.original_window_name {
@@ -461,6 +461,13 @@ fn cmd_generate_config() -> anyhow::Result<()> {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
+
+/// Produce a `cd '<path>'` command safe for use with tmux send-keys.
+/// Single quotes in the path are escaped as `'\''` (POSIX shell quoting).
+fn cd_cmd(path: &std::path::Path) -> String {
+    let escaped = path.to_string_lossy().replace('\'', "'\\''");
+    format!("cd '{escaped}'")
+}
 
 fn read_git_config(key: &str) -> Option<String> {
     std::process::Command::new("git")
