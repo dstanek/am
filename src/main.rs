@@ -125,9 +125,9 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
         return Err(error::AmError::AutoRequiresAgent.into());
     }
 
-    // 3. Agent credentials
+    // 3. Agent name
     if let Some(ref agent) = effective_agent {
-        container::validate_agent(agent)?;
+        container::validate_agent_name(agent)?;
     }
 
     // 4. Require am init when using containers
@@ -143,6 +143,11 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
     // 5. Container config
     let use_container = cfg.container.enabled && !no_container;
     let (_runtime, container_cmd, session_container) = if use_container {
+        // Credential check only applies when container will mount them
+        if let Some(ref agent) = effective_agent {
+            container::validate_agent_credentials(agent)?;
+        }
+
         let image = config::resolve_image(effective_agent.as_deref(), &cfg)
             .ok_or(error::AmError::ContainerImageNotConfigured)?;
 

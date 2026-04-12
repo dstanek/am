@@ -250,10 +250,23 @@ pub fn agent_extra_env(agent: &str) -> Result<Vec<(String, String)>> {
     }
 }
 
-/// Validate that a known agent has its required credential directories
-/// present on the host. Unknown values are treated as raw commands and always pass.
-/// Call this early in `am start` before any side effects.
-pub fn validate_agent(agent: &str) -> Result<()> {
+/// Validate that the agent name is a known preset or treat it as a raw command.
+/// Returns an error for names that look like they should be a preset but aren't.
+/// Call unconditionally in `am start` before any side effects.
+pub fn validate_agent_name(agent: &str) -> Result<()> {
+    match agent {
+        "claude" | "copilot" | "gemini" | "codex" => Ok(()),
+        unknown => Err(AmError::ConfigError(format!(
+            "unknown agent '{unknown}' — valid agents are: claude, copilot, gemini, codex",
+        ))
+        .into()),
+    }
+}
+
+/// Validate that a known agent's required credential directories exist on the host.
+/// Only meaningful when a container will be launched (credentials are mounted at runtime).
+/// Call in `am start` only when container mode is active.
+pub fn validate_agent_credentials(agent: &str) -> Result<()> {
     let home = home_dir()?;
     let config_dir = std::env::var("CLAUDE_CONFIG_DIR")
         .map(PathBuf::from)
@@ -264,12 +277,7 @@ pub fn validate_agent(agent: &str) -> Result<()> {
         "copilot" => (vec![home.join(".config").join("gh")], "copilot"),
         "gemini" => (vec![home.join(".gemini")], "gemini"),
         "codex" => return Ok(()), // env-var only, no filesystem check
-        unknown => {
-            return Err(AmError::ConfigError(format!(
-                "unknown agent '{unknown}' — valid agents are: claude, copilot, gemini, codex",
-            ))
-            .into())
-        }
+        _ => return Ok(()),       // raw command — no credential check
     };
 
     for path in &required {
@@ -1015,98 +1023,113 @@ mod tests {
         std::env::remove_var("HOME");
     }
 
-    // ── validate_agent ─────────────────────────────────────────────────
+    // ── validate_agent_name ────────────────────────────────────────────
 
     #[test]
-    fn validate_agent_claude_ok_when_dir_exists() {
+    fn validate_agent_name_known_agents_ok() {
+        for agent in &["claude", "copilot", "gemini", "codex"] {
+            assert!(validate_agent_name(agent).is_ok(), "expected {agent} to pass name check");
+        }
+    }
+
+    #[test]
+    fn validate_agent_name_unknown_errors() {
+        let err = validate_agent_name("my-custom-agent").unwrap_err();
+        assert!(err.to_string().contains("my-custom-agent"));
+    }
+
+    // ── validate_agent_credentials ─────────────────────────────────────
+
+    #[test]
+    fn validate_agent_credentials_claude_ok_when_dir_exists() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
         std::env::remove_var("CLAUDE_CONFIG_DIR");
         std::fs::create_dir(tmp.path().join(".claude")).unwrap();
 
-        assert!(validate_agent("claude").is_ok());
+        assert!(validate_agent_credentials("claude").is_ok());
 
         std::env::remove_var("HOME");
     }
 
     #[test]
-    fn validate_agent_claude_fails_when_dir_missing() {
+    fn validate_agent_credentials_claude_fails_when_dir_missing() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
         std::env::remove_var("CLAUDE_CONFIG_DIR");
 
-        assert!(validate_agent("claude").is_err());
+        assert!(validate_agent_credentials("claude").is_err());
 
         std::env::remove_var("HOME");
     }
 
     #[test]
-    fn validate_agent_copilot_ok_when_gh_dir_exists() {
+    fn validate_agent_credentials_copilot_ok_when_gh_dir_exists() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
         std::fs::create_dir_all(tmp.path().join(".config").join("gh")).unwrap();
 
-        assert!(validate_agent("copilot").is_ok());
+        assert!(validate_agent_credentials("copilot").is_ok());
 
         std::env::remove_var("HOME");
     }
 
     #[test]
-    fn validate_agent_copilot_fails_when_gh_dir_missing() {
+    fn validate_agent_credentials_copilot_fails_when_gh_dir_missing() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
-        assert!(validate_agent("copilot").is_err());
+        assert!(validate_agent_credentials("copilot").is_err());
 
         std::env::remove_var("HOME");
     }
 
     #[test]
-    fn validate_agent_gemini_ok_when_dir_exists() {
+    fn validate_agent_credentials_gemini_ok_when_dir_exists() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
         std::fs::create_dir(tmp.path().join(".gemini")).unwrap();
 
-        assert!(validate_agent("gemini").is_ok());
+        assert!(validate_agent_credentials("gemini").is_ok());
 
         std::env::remove_var("HOME");
     }
 
     #[test]
-    fn validate_agent_gemini_fails_when_dir_missing() {
+    fn validate_agent_credentials_gemini_fails_when_dir_missing() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
-        assert!(validate_agent("gemini").is_err());
+        assert!(validate_agent_credentials("gemini").is_err());
 
         std::env::remove_var("HOME");
     }
 
     #[test]
-    fn validate_agent_codex_always_ok() {
+    fn validate_agent_credentials_codex_always_ok() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
-        assert!(validate_agent("codex").is_ok());
+        assert!(validate_agent_credentials("codex").is_ok());
 
         std::env::remove_var("HOME");
     }
 
     #[test]
-    fn validate_agent_unknown_errors() {
+    fn validate_agent_credentials_raw_command_always_ok() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
-        let err = validate_agent("my-custom-agent").unwrap_err();
-        assert!(err.to_string().contains("my-custom-agent"));
+        // Unknown names are raw commands — no credential check, always pass
+        assert!(validate_agent_credentials("my-custom-agent").is_ok());
 
         std::env::remove_var("HOME");
     }
