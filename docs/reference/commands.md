@@ -81,16 +81,18 @@ Reads from `.am/sessions.json` and prints a table of all recorded sessions. If t
 | Column | Description |
 |---|---|
 | `SLUG` | The session name |
-| `AGENT` | The agent command configured for this session |
+| `CONTAINER` | Container runtime in use (`podman`, `docker`), or `—` if no container |
+| `AUTO` | `yes` if the session was started with `--auto`, otherwise `—` |
+| `WORKTREE` | Absolute path to the session's git worktree or jj workspace |
 | `WINDOW` | The tmux window name (`am-<slug>`) |
-| `CREATED` | Human-readable relative time since the session was created |
+| `CREATED` | Timestamp when the session was created (`YYYY-MM-DD HH:MM`) |
 
 **Example output**
 
 ```
-SLUG     AGENT    WINDOW       CREATED
-feat     claude   am-feat      12 min ago
-bugfix   claude   am-bugfix    3 min ago
+SLUG    CONTAINER  AUTO  WORKTREE                          WINDOW     CREATED
+feat    podman     —     /home/user/proj/.am/worktrees/feat am-feat    2026-04-12 09:00
+bugfix  —          —     /home/user/proj/.am/worktrees/bugfix am-bugfix 2026-04-12 08:47
 ```
 
 ---
