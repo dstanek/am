@@ -1,3 +1,39 @@
+## [0.4.0] - 2026-04-12
+
+### 🚀 Features
+
+- *(config)* Respect XDG_CONFIG_HOME for global config path
+
+### 🐛 Bug Fixes
+
+- *(main)* Escape single quotes in cd commands sent via send_keys
+- *(worktree)* Replace unwrap_or(".") with to_string_lossy() in run_git
+- *(worktree)* Handle binary names in AM_GIT_BIN and AM_JJ_BIN
+
+### 🚜 Refactor
+
+- *(config)* Remove unimplemented startup_delay_ms option
+- *(container)* Split validate_agent into name and credential checks
+- *(tmux)* Change tmux_bin() return type from String to PathBuf
+- *(main)* Merge detect_vcs into find_repo_root
+
+### 📚 Documentation
+
+- Fix container mount paths in concepts and claude-code guides
+- Remove GIT_DIR/GIT_WORK_TREE injection claims and fix remaining stale paths
+- *(commands)* Fix am list output columns and example
+- *(commands)* Fix --agent valid values and add --auto to am start options
+- *(release)* Add main branch guard to release command
+
+### 🧪 Testing
+
+- Add missing coverage for git_worktree_has_changes and gemini auth mount
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove aider agent — no plans to implement
+- Sync version to 0.3.0 and update installation docs
+- *(worktree)* Make binary resolution robust in worktree copy
 ## [0.3.0] - 2026-04-11
 
 ### 🚀 Features
@@ -40,6 +76,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - *(docker)* Switch Claude image to native installer
+- *(release)* V0.3.0
 ## [0.2.0] - 2026-04-01
 
 ### 🚀 Features
