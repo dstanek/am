@@ -125,7 +125,7 @@ am --version
 Expected output:
 
 ```
-am 0.1.2
+am 0.3.0
 ```
 
 To see all available commands and options:
