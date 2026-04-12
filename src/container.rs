@@ -1181,6 +1181,21 @@ mod tests {
     }
 
     #[test]
+    fn resolve_agent_auth_mount_gemini_returns_dot_gemini() {
+        let _g = lock_env();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path());
+
+        let mounts = resolve_agent_auth_mount("gemini");
+        assert_eq!(mounts.len(), 1);
+        assert_eq!(mounts[0].host_path, tmp.path().join(".gemini"));
+        assert_eq!(mounts[0].container_path, PathBuf::from("/home/am/.gemini"));
+        assert_eq!(mounts[0].mode, MountMode::ReadOnly);
+
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
     fn codex_returns_no_mount() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();

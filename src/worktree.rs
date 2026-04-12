@@ -359,4 +359,32 @@ mod tests {
         assert!(!worktree_path.exists(), "worktree directory should be gone");
         assert!(!branch_exists("feat", tmp.path()), "branch should be deleted");
     }
+
+    // ── git_worktree_has_changes ───────────────────────────────────────────────
+
+    #[test]
+    fn git_worktree_has_changes_returns_false_for_clean_worktree() {
+        let tmp = TempDir::new().unwrap();
+        init_repo_with_commit(tmp.path());
+        let worktree_path = create_git_worktree("feat", tmp.path()).unwrap();
+
+        assert!(!git_worktree_has_changes(&worktree_path));
+    }
+
+    #[test]
+    fn git_worktree_has_changes_returns_true_when_file_modified() {
+        let tmp = TempDir::new().unwrap();
+        init_repo_with_commit(tmp.path());
+        let worktree_path = create_git_worktree("feat", tmp.path()).unwrap();
+
+        std::fs::write(worktree_path.join("dirty.txt"), "uncommitted").unwrap();
+
+        assert!(git_worktree_has_changes(&worktree_path));
+    }
+
+    #[test]
+    fn git_worktree_has_changes_returns_false_for_nonexistent_path() {
+        let tmp = TempDir::new().unwrap();
+        assert!(!git_worktree_has_changes(&tmp.path().join("no-such-dir")));
+    }
 }
