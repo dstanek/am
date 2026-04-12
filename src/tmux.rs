@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
@@ -14,16 +14,20 @@ use crate::error::AmError;
 // - Use .display() for logging/error messages (implements Display trait)
 
 /// Returns the tmux binary to use. Tests can override via `AM_TMUX_BIN`.
-fn tmux_bin() -> String {
-    std::env::var("AM_TMUX_BIN").unwrap_or_else(|_| "tmux".to_string())
+fn tmux_bin() -> PathBuf {
+    std::env::var("AM_TMUX_BIN")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("tmux"))
 }
 
 fn run_tmux(args: &[&str]) -> Result<()> {
-    command::run_command(&tmux_bin(), args, AmError::TmuxError)
+    let bin = tmux_bin();
+    command::run_command(&bin.to_string_lossy(), args, AmError::TmuxError)
 }
 
 fn run_tmux_output(args: &[&str]) -> Result<String> {
-    command::run_command_output(&tmux_bin(), args, AmError::TmuxError)
+    let bin = tmux_bin();
+    command::run_command_output(&bin.to_string_lossy(), args, AmError::TmuxError)
 }
 
 /// Returns `true` if the `$TMUX` environment variable is set (i.e. we are
