@@ -265,15 +265,17 @@ fn parse_config_file(path: &Path) -> Result<FileConfig> {
     Ok(file)
 }
 
-/// Returns the global config path: `~/.config/am/config.toml`
+/// Returns the global config path: `$XDG_CONFIG_HOME/am/config.toml` if set,
+/// otherwise `~/.config/am/config.toml`.
 pub fn global_config_path() -> Option<PathBuf> {
     dirs_path().map(|d| d.join("config.toml"))
 }
 
 fn dirs_path() -> Option<PathBuf> {
-    std::env::var("HOME")
-        .ok()
-        .map(|h| PathBuf::from(h).join(".config").join("am"))
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
+    Some(base.join("am"))
 }
 
 /// Write the default project config file at `path` (creates parent directories as needed).
@@ -691,5 +693,32 @@ image = "myorg/am-claude:project"
             config.agents.get("copilot").and_then(|a| a.image.as_deref()),
             Some("ghcr.io/dstanek/am-copilot-minimal:latest")
         );
+    }
+
+    #[test]
+    fn global_config_path_uses_xdg_config_home() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        let tmp = TempDir::new().unwrap();
+        let xdg_dir = tmp.path().join("xdg");
+        std::env::set_var("XDG_CONFIG_HOME", &xdg_dir);
+        std::env::remove_var("HOME");
+
+        let path = global_config_path();
+        assert_eq!(path, Some(xdg_dir.join("am").join("config.toml")));
+
+        std::env::remove_var("XDG_CONFIG_HOME");
+    }
+
+    #[test]
+    fn global_config_path_falls_back_to_home_dot_config() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        let tmp = TempDir::new().unwrap();
+        std::env::remove_var("XDG_CONFIG_HOME");
+        std::env::set_var("HOME", tmp.path());
+
+        let path = global_config_path();
+        assert_eq!(path, Some(tmp.path().join(".config").join("am").join("config.toml")));
+
+        std::env::remove_var("HOME");
     }
 }
