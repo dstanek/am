@@ -402,19 +402,19 @@ am start feat --agent claude
 
 | Host path | Container path | Mode |
 |---|---|---|
-| `.am/worktrees/<slug>` | `/workspace` | read-write |
-| `<repo-root>/.git` | `/mainrepo/.git` | read-write |
-| `~/.gitconfig` | `/root/.gitconfig` | read-only |
-| `~/.ssh` | `/root/.ssh` | read-only |
+| `.am/worktrees/<slug>` | same path as host | read-write |
+| `<repo-root>/.git` | same path as host | read-write |
+| `~/.gitconfig` | `/home/am/.gitconfig` | read-only |
+| `~/.ssh` | `/home/am/.ssh` | read-only |
 
-`am` injects `GIT_DIR` and `GIT_WORK_TREE` environment variables so that `git` commands issued from `/workspace` target the correct worktree branch.
+Paths are mirrored from the host so that absolute paths resolve correctly inside the container. The container runs as the host user (matched uid/gid).
 
 !!! note "jj repositories"
-    For jj repositories, the mount layout mirrors the host path structure, and `GIT_DIR`/`GIT_WORK_TREE` are not set. The container's working directory is still set to the jj workspace path.
+    For jj repositories, the `.jj` directory is mounted at the same host path instead of `.git`. Colocated jj+git repos mount both.
 
 ### SSH and Git credentials inside the container
 
-Your SSH keys from `~/.ssh` are mounted read-only into the container at `/root/.ssh`. Similarly, `~/.gitconfig` is mounted at `/root/.gitconfig`. This allows the agent to make authenticated git and SSH operations (e.g., `git push`, `git pull` from private repositories).
+Your SSH keys from `~/.ssh` are mounted read-only into the container at `/home/am/.ssh`. Similarly, `~/.gitconfig` is mounted at `/home/am/.gitconfig`. This allows the agent to make authenticated git and SSH operations (e.g., `git push`, `git pull` from private repositories).
 
 ---
 

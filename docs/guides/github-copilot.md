@@ -139,19 +139,19 @@ am start feat
 
 | Host path | Container path | Mode |
 |---|---|---|
-| `.am/worktrees/<slug>` | `/workspace` | read-write |
-| `<repo-root>/.git` | `/mainrepo/.git` | read-write |
-| `~/.gitconfig` | `/root/.gitconfig` | read-only |
-| `~/.ssh` | `/root/.ssh` | read-only |
-| `~/.config/gh` | `/root/.config/gh` | read-only |
-| `~/.config/github-copilot` | `/root/.config/github-copilot` | read-only |
+| `.am/worktrees/<slug>` | same path as host | read-write |
+| `<repo-root>/.git` | same path as host | read-write |
+| `~/.gitconfig` | `/home/am/.gitconfig` | read-only |
+| `~/.ssh` | `/home/am/.ssh` | read-only |
+| `~/.config/gh` | `/home/am/.config/gh` | read-only |
+| `~/.config/github-copilot` | `/home/am/.config/github-copilot` | read-only |
 
 The Copilot agent integration mounts two credential directories: `~/.config/gh` holds the GitHub CLI authentication tokens, and `~/.config/github-copilot` stores Copilot-specific settings and cached tokens. Both are required for the agent to function.
 
-`am` injects `GIT_DIR` and `GIT_WORK_TREE` into the container environment so that git operations from `/workspace` target the correct worktree branch.
+Paths are mirrored from the host so that absolute paths resolve correctly inside the container. The container runs as the host user (matched uid/gid).
 
 !!! note "jj repositories"
-    For jj repositories, the mount layout mirrors the host path structure instead. `GIT_DIR` and `GIT_WORK_TREE` are not set. The working directory inside the container is the jj workspace path.
+    For jj repositories, the `.jj` directory is mounted at the same host path instead of `.git`. Colocated jj+git repos mount both.
 
 ---
 
