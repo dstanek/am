@@ -168,7 +168,7 @@ echo $ANTHROPIC_API_KEY  # or OPENAI_API_KEY
 
 ```toml
 [defaults]
-agent = "aider"
+agent = "codex"
 
 [container]
 env = ["ANTHROPIC_API_KEY"]
@@ -274,7 +274,6 @@ To add project-specific language runtimes or tools:
 - Copilot: `dockerfiles/Dockerfile.copilot-minimal`
 - Gemini: `dockerfiles/Dockerfile.gemini-minimal`
 - Codex: `dockerfiles/Dockerfile.codex-minimal`
-- Aider: `dockerfiles/Dockerfile.aider-minimal`
 
 2. Layer your tools on top and build:
 
@@ -485,7 +484,6 @@ If you encounter an issue not covered here:
    - [GitHub Copilot](github-copilot.md)
    - [Gemini](gemini.md)
    - [Codex](codex.md)
-   - [Aider](aider.md)
 
 2. Review your configuration with `am generate-config` to verify settings are correct.
 

@@ -30,18 +30,6 @@ Auth mount preset for Google Gemini CLI: `~/.gemini:/root/.gemini:ro`.
 
 ---
 
-### Feature 9: Aider Integration
-> Spec: [`specs/aider-integration.md`](specs/aider-integration.md)
-
-Env-var-only auth preset for Aider — passes through both `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`.
-
-- [ ] Design: no mount; both `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in env pass-through; only inject keys that are actually set on the host
-- [ ] Tests: `resolve_agent_auth_mount("aider")` returns `None`; `build_run_command` includes both `-e ANTHROPIC_API_KEY` and `-e OPENAI_API_KEY` when aider preset active
-- [ ] Implementation: `aider` branch in `resolve_agent_auth_mount()` (returns `None`); env var injection for both keys
-- [ ] UX Review: `am start feat --agent aider` passes both API key vars into the container; no spurious mount errors
-
----
-
 ## Polish & Distribution
 > Spec: [`specs/polish-and-distribution.md`](specs/polish-and-distribution.md)
 
@@ -56,7 +44,7 @@ Write `README.md` at the repo root covering:
 2. Install — `cargo install --path .` and eventual binary download placeholder
 3. Quick start — `am init` → `am start feat --agent claude` → `am attach feat` → `am destroy feat`
 4. Configuration — pointer to `config.md`; minimal `~/.config/am/config.toml` example
-5. Supported agents — table: claude, codex, copilot, gemini, aider
+5. Supported agents — table: claude, codex, copilot, gemini
 6. Example Dockerfile — minimal image that installs `claude` and works with `am`
 
 ### Error message audit

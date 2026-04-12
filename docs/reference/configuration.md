@@ -87,7 +87,7 @@ The `am start` command accepts flags that act as the highest-precedence override
 
 | Flag | Description |
 |---|---|
-| `--agent <AGENT>` | Override the agent command for this session only. Must be a known agent integration: `claude`, `copilot`, `gemini`, `codex`, `aider`. |
+| `--agent <AGENT>` | Override the agent command for this session only. Must be a known agent integration: `claude`, `copilot`, `gemini`, `codex`. |
 | `--no-container` | Disable container isolation for this session. The agent runs directly in the tmux pane. |
 
 ---

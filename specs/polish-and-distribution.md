@@ -28,7 +28,7 @@ Write `README.md` at the repo root covering:
 2. **Install** — `cargo install --path .` and eventual binary download (placeholder)
 3. **Quick start** — `am init` → `am start feat --agent claude` → `am attach feat` → `am destroy feat`
 4. **Configuration** — point to `config.md`; show a minimal `~/.config/am/config.toml`
-5. **Supported agents** — table: claude, codex, copilot, gemini, aider
+5. **Supported agents** — table: claude, codex, copilot, gemini
 6. **Example Dockerfile** — a minimal Dockerfile that installs claude and works with `am`
 
 ### Error Message Audit

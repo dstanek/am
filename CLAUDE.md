@@ -32,7 +32,7 @@ make build-copilot       # Build Copilot Docker image
 
 **Container mounts:** git repos use `GIT_DIR`/`GIT_WORK_TREE` env vars; jj repos mirror host path structure. See `container.rs`.
 
-**Agent auth presets** (`claude`, `copilot`, `gemini`, `codex`, `aider`) mount credentials at runtime. Unknown agent names are raw executable commands with no auth.
+**Agent auth presets** (`claude`, `copilot`, `gemini`, `codex`) mount credentials at runtime. Unknown agent names are raw executable commands with no auth.
 
 ## Testing
 

@@ -208,7 +208,7 @@ pub fn resolve_agent_auth_mount(agent: &str) -> Vec<AgentAuthMount> {
             container_path: PathBuf::from("/home/am/.gemini"),
             mode: MountMode::ReadOnly,
         }],
-        "codex" | "aider" => vec![], // env-var only, no filesystem mount
+        "codex" => vec![], // env-var only, no filesystem mount
         _unknown => vec![],          // treat as a raw launch command — no auth mount
     }
 }
@@ -494,7 +494,6 @@ mod tests {
 
     #[test]
     fn agent_auto_flags_unknown_agent_returns_empty() {
-        assert!(agent_auto_flags("aider").is_empty());
         assert!(agent_auto_flags("codex").is_empty());
         assert!(agent_auto_flags("my-custom-agent").is_empty());
     }
@@ -1159,13 +1158,12 @@ mod tests {
     }
 
     #[test]
-    fn codex_and_aider_return_no_mount() {
+    fn codex_returns_no_mount() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
         assert!(resolve_agent_auth_mount("codex").is_empty());
-        assert!(resolve_agent_auth_mount("aider").is_empty());
 
         std::env::remove_var("HOME");
     }

@@ -42,7 +42,6 @@ Whatever base image you choose, **the agent binary must be present on the contai
 | `copilot` | `gh` with the Copilot extension |
 | `gemini` | `gemini` |
 | `codex` | `codex` |
-| `aider` | `aider` |
 
 For unknown agent names (a raw command string), whatever binary you pass must exist in the image.
 
