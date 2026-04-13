@@ -106,11 +106,11 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 
 - [x] **Design**
   - [x] Mount table for git repos (worktree, `.git`, `~/.gitconfig`, `~/.ssh`)
-  - [x] `GIT_DIR` / `GIT_WORK_TREE` env var injection
+  - ~~`GIT_DIR` / `GIT_WORK_TREE` env vars~~ — removed; host paths mirrored at same absolute paths inside container
   - [x] SELinux `,z` label: Linux + Podman only
   - [x] Container naming: `am-<slug>`; pre-emptive `podman rm -f` on collision
   - [x] `--no-container` flag behaviour: `container: null` in session record
-  - [x] `container.startup_delay_ms` configurable (default 500ms)
+  - ~~`container.startup_delay_ms`~~ — removed; agent is appended to container CMD directly
   - [x] Fail loudly if `container.image` not set when container mode active
 
 - [x] **Tests**
@@ -152,7 +152,7 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 - [x] **Implementation**
   - [x] `resolve_agent_auth_mount()` with `claude` preset
   - [x] Wire `agent_preset` through `resolve_mounts()` and `build_run_command()`
-  - [x] Auto-launch `send_keys` with configurable delay (`startup_delay_ms`)
+  - [x] Agent appended to container CMD for auto-launch (no delay needed)
   - [x] `am run` command fully implemented
 
 - [x] **UX Review** — `am start feat --agent claude` opens a container and auto-launches Claude Code; `am run feat claude` works on an existing session
@@ -275,7 +275,7 @@ Track design decisions made during implementation:
 | 2 | Branch base | Current `HEAD` | git worktree |
 | 3 | Split ratio | Configurable `split_percent`, default 50 | tmux |
 | 4 | `am done` / lifecycle notifications | Removed `am done`; deferred to v2 as automatic pane-exit detection + OS notification | lifecycle |
-| 5 | Container startup delay | Configurable `startup_delay_ms`, default 500 | Podman |
+| 5 | Container startup delay | Removed — agent is appended to container CMD directly | Podman |
 | 6 | SELinux `,z` | Linux + Podman only | Podman |
 | 7 | Container name collision | `podman rm -f am-<slug>` before launch, log warning | Podman |
 | 8 | `am attach` when no window | Creates window + split (create-or-attach), not an error | tmux |

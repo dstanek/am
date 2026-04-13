@@ -27,8 +27,9 @@ so the Gemini CLI can authenticate without any user intervention.
 
 ### Agent launch
 
-`config.agent = "gemini"` (or `--agent gemini`) activates the preset. After the container
-starts, a second `send_keys` fires after `startup_delay_ms` to run `gemini` in the agent pane.
+`config.agent = "gemini"` (or `--agent gemini`) activates the preset. When running inside
+tmux, the container command is sent to the agent pane via `send_keys`; outside tmux the
+process is replaced via `exec`.
 
 ## Design
 

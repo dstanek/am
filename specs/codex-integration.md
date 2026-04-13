@@ -28,8 +28,9 @@ feature extends it to support env-var-only presets.
 
 ### Agent launch
 
-`config.agent = "codex"` (or `--agent codex`) activates the preset. After the container
-starts, a second `send_keys` fires after `startup_delay_ms` to run `codex` in the agent pane.
+`config.agent = "codex"` (or `--agent codex`) activates the preset. When running inside
+tmux, the container command is sent to the agent pane via `send_keys`; outside tmux the
+process is replaced via `exec`.
 
 ## Design
 
