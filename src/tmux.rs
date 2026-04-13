@@ -13,20 +13,33 @@ use crate::error::AmError;
 // - Prefer .to_string_lossy() for command arguments (handles UTF-8 gracefully)
 // - Use .display() for logging/error messages (implements Display trait)
 
-/// Returns the tmux binary to use. Tests can override via `AM_TMUX_BIN`.
-fn tmux_bin() -> PathBuf {
-    std::env::var("AM_TMUX_BIN")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("tmux"))
+/// Returns the tmux binary path, respecting the `AM_TMUX_BIN` env override.
+fn tmux_bin() -> Result<PathBuf> {
+    if let Ok(path) = std::env::var("AM_TMUX_BIN") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return Ok(p);
+        }
+        // If AM_TMUX_BIN is a binary name like "tmux", try to locate it on PATH.
+        if let Ok(found) = which::which(&path) {
+            return Ok(found);
+        }
+        return Err(AmError::TmuxError(format!(
+            "tmux binary not found (AM_TMUX_BIN is set to {path} but was not found)"
+        ))
+        .into());
+    }
+    which::which("tmux")
+        .map_err(|_| AmError::TmuxError("tmux not found on PATH".to_string()).into())
 }
 
 fn run_tmux(args: &[&str]) -> Result<()> {
-    let bin = tmux_bin();
+    let bin = tmux_bin()?;
     command::run_command(&bin.to_string_lossy(), args, AmError::TmuxError)
 }
 
 fn run_tmux_output(args: &[&str]) -> Result<String> {
-    let bin = tmux_bin();
+    let bin = tmux_bin()?;
     command::run_command_output(&bin.to_string_lossy(), args, AmError::TmuxError)
 }
 
