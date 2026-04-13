@@ -27,8 +27,7 @@ fn git_bin() -> Result<PathBuf> {
 }
 
 /// Run a `git` subcommand with the given args in the given directory.
-fn run_git(repo_root: &Path, args: &[&str]) -> Result<()> {
-    let bin = git_bin()?;
+fn run_git(bin: &Path, repo_root: &Path, args: &[&str]) -> Result<()> {
     let bin_str = bin.to_string_lossy();
     let root_str = repo_root.to_string_lossy();
     let mut full_args = vec!["-C", root_str.as_ref(), "--no-pager"];
@@ -37,8 +36,7 @@ fn run_git(repo_root: &Path, args: &[&str]) -> Result<()> {
 }
 
 /// Run a `git` subcommand and return stdout.
-fn run_git_output(repo_root: &Path, args: &[&str]) -> Result<String> {
-    let bin = git_bin()?;
+fn run_git_output(bin: &Path, repo_root: &Path, args: &[&str]) -> Result<String> {
     let bin_str = bin.to_string_lossy();
     let root_str = repo_root.to_string_lossy();
     let mut full_args = vec!["-C", root_str.as_ref(), "--no-pager"];
@@ -47,17 +45,19 @@ fn run_git_output(repo_root: &Path, args: &[&str]) -> Result<String> {
 }
 
 /// Returns true if the branch `am/<slug>` exists in the repo at `repo_root`.
-fn branch_exists(slug: &str, repo_root: &Path) -> bool {
+fn branch_exists(bin: &Path, slug: &str, repo_root: &Path) -> bool {
     let branch_ref = format!("refs/heads/am/{slug}");
-    run_git_output(repo_root, &["rev-parse", "--verify", &branch_ref]).is_ok()
+    run_git_output(bin, repo_root, &["rev-parse", "--verify", &branch_ref]).is_ok()
 }
 
 /// Create a git worktree for `slug` at `<repo-root>/.am/worktrees/<slug>`.
 /// Creates branch `am/<slug>` off HEAD. Errors with `SlugAlreadyExists` if
 /// the branch already exists.
 pub fn create_git_worktree(slug: &str, repo_root: &Path) -> Result<PathBuf> {
+    let bin = git_bin()?;
+
     // Check for unborn HEAD (no commits yet) before anything else
-    if run_git_output(repo_root, &["rev-parse", "HEAD"]).is_err() {
+    if run_git_output(&bin, repo_root, &["rev-parse", "HEAD"]).is_err() {
         return Err(AmError::WorktreeError(
             "repository has no commits yet — make an initial commit before running 'am start'"
                 .to_string(),
@@ -65,7 +65,7 @@ pub fn create_git_worktree(slug: &str, repo_root: &Path) -> Result<PathBuf> {
         .into());
     }
 
-    if branch_exists(slug, repo_root) {
+    if branch_exists(&bin, slug, repo_root) {
         return Err(AmError::SlugAlreadyExists(slug.to_string()).into());
     }
 
@@ -80,6 +80,7 @@ pub fn create_git_worktree(slug: &str, repo_root: &Path) -> Result<PathBuf> {
 
     // `git worktree add -b <branch> <path>` creates branch off HEAD and checks it out
     run_git(
+        &bin,
         repo_root,
         &["worktree", "add", "-b", &branch_name, &worktree_path_str],
     )?;
@@ -158,6 +159,8 @@ pub fn git_worktree_has_changes(worktree_path: &Path) -> bool {
 
 /// Remove the git worktree for `slug` and delete the `am/<slug>` branch.
 pub fn remove_git_worktree(slug: &str, repo_root: &Path) -> Result<()> {
+    let bin = git_bin()?;
+
     // Remove the directory first — once it's gone git treats the worktree as
     // invalid, which lets prune succeed without special flags.
     let worktree_path = repo_root.join(".am").join("worktrees").join(slug);
@@ -167,12 +170,12 @@ pub fn remove_git_worktree(slug: &str, repo_root: &Path) -> Result<()> {
     }
 
     // Prune stale worktree registration
-    let _ = run_git(repo_root, &["worktree", "prune"]);
+    let _ = run_git(&bin, repo_root, &["worktree", "prune"]);
 
     // Delete the branch
     let branch_name = format!("am/{slug}");
-    if branch_exists(slug, repo_root) {
-        run_git(repo_root, &["branch", "-D", &branch_name])?;
+    if branch_exists(&bin, slug, repo_root) {
+        run_git(&bin, repo_root, &["branch", "-D", &branch_name])?;
     }
 
     Ok(())
@@ -340,7 +343,8 @@ mod tests {
         );
 
         // Branch should exist
-        assert!(branch_exists("feat", tmp.path()));
+        let bin = git_bin().unwrap();
+        assert!(branch_exists(&bin, "feat", tmp.path()));
     }
 
     #[test]
@@ -364,7 +368,8 @@ mod tests {
         remove_git_worktree("feat", tmp.path()).unwrap();
 
         assert!(!worktree_path.exists(), "worktree directory should be gone");
-        assert!(!branch_exists("feat", tmp.path()), "branch should be deleted");
+        let bin = git_bin().unwrap();
+        assert!(!branch_exists(&bin, "feat", tmp.path()), "branch should be deleted");
     }
 
     // ── git_worktree_has_changes ───────────────────────────────────────────────
