@@ -449,6 +449,27 @@ fn apply_env_vars(config: &mut Config) {
     }
 }
 
+/// Validate that every entry in `container.env` is a valid env var pass-through.
+/// Each entry must be either `NAME` or `NAME=value` where NAME is a non-empty
+/// identifier (letters, digits, underscores). Entries starting with `-` would
+/// be passed as flags to the container runtime, producing confusing errors.
+fn validate_env_passthrough(env: &[String]) -> Result<()> {
+    for entry in env {
+        let name = entry.split('=').next().unwrap_or("");
+        let valid = !name.is_empty()
+            && name.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if !valid {
+            return Err(anyhow::anyhow!(
+                "invalid container.env entry '{entry}': must be 'NAME' or 'NAME=value' \
+                 where NAME starts with a letter or underscore and contains only \
+                 letters, digits, and underscores"
+            ));
+        }
+    }
+    Ok(())
+}
+
 pub fn load_with_global(global_path: Option<&Path>, project_config_path: Option<&Path>) -> Result<Config> {
     let mut config = Config::default();
 
@@ -470,6 +491,8 @@ pub fn load_with_global(global_path: Option<&Path>, project_config_path: Option<
 
     // Apply environment variable overrides (highest precedence after CLI flags)
     apply_env_vars(&mut config);
+
+    validate_env_passthrough(&config.container.env)?;
 
     Ok(config)
 }
@@ -725,5 +748,46 @@ image = "myorg/am-claude:project"
         assert_eq!(path, Some(tmp.path().join(".config").join("am").join("config.toml")));
 
         std::env::remove_var("HOME");
+    }
+
+    // ── validate_env_passthrough ──────────────────────────────────────────────
+
+    #[test]
+    fn valid_env_entries_accepted() {
+        assert!(validate_env_passthrough(&[
+            "ANTHROPIC_API_KEY".to_string(),
+            "FOO=bar".to_string(),
+            "_UNDERSCORE_START".to_string(),
+            "LOWER_case=value".to_string(),
+        ]).is_ok());
+    }
+
+    #[test]
+    fn env_entry_starting_with_dash_rejected() {
+        let err = validate_env_passthrough(&["--rm".to_string()]).unwrap_err();
+        assert!(err.to_string().contains("--rm"));
+    }
+
+    #[test]
+    fn env_entry_with_space_in_name_rejected() {
+        let err = validate_env_passthrough(&["FOO BAR=val".to_string()]).unwrap_err();
+        assert!(err.to_string().contains("FOO BAR=val"));
+    }
+
+    #[test]
+    fn env_entry_starting_with_digit_rejected() {
+        let err = validate_env_passthrough(&["1INVALID".to_string()]).unwrap_err();
+        assert!(err.to_string().contains("1INVALID"));
+    }
+
+    #[test]
+    fn load_with_global_errors_on_bad_env_entry() {
+        let tmp = TempDir::new().unwrap();
+        let project = write_toml(tmp.path(), "config.toml", r#"
+[container]
+env = ["--rm"]
+"#);
+        let err = load_with_global(None, Some(&project)).unwrap_err();
+        assert!(err.to_string().contains("--rm"));
     }
 }
