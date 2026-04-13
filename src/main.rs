@@ -188,7 +188,7 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
         }
 
         let sc = session::SessionContainer {
-            runtime: format!("{:?}", runtime.kind).to_lowercase(),
+            runtime: runtime.kind.to_string(),
             image: image.to_string(),
             container_id: None,
         };

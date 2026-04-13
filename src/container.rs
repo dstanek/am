@@ -21,6 +21,15 @@ pub enum RuntimeKind {
     Docker,
 }
 
+impl std::fmt::Display for RuntimeKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RuntimeKind::Podman => write!(f, "podman"),
+            RuntimeKind::Docker => write!(f, "docker"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ContainerRuntime {
     pub kind: RuntimeKind,
