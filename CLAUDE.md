@@ -30,7 +30,7 @@ make build-copilot       # Build Copilot Docker image
 
 **VCS detection:** checks `.jj/` first, falls back to `.git`, errors if neither found.
 
-**Container mounts:** git repos use `GIT_DIR`/`GIT_WORK_TREE` env vars; jj repos mirror host path structure. See `container.rs`.
+**Container mounts:** both git and jj repos mirror the host path structure inside the container (worktree and VCS dirs are mounted at the same absolute paths). No `GIT_DIR`/`GIT_WORK_TREE` env vars are injected. See `container.rs`.
 
 **Agent auth presets** (`claude`, `copilot`, `gemini`, `codex`) mount credentials at runtime. Unknown agent names are rejected early with a clear error listing valid agents.
 
