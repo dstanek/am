@@ -124,10 +124,11 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
         return Err(error::AmError::AutoRequiresAgent.into());
     }
 
-    // 3. Agent name
-    if let Some(ref agent) = effective_agent {
-        container::validate_agent_name(agent)?;
-    }
+    // 3. Parse agent name — validates and gives a typed KnownAgent for container functions
+    let effective_known_agent: Option<container::KnownAgent> = effective_agent
+        .as_deref()
+        .map(container::KnownAgent::parse)
+        .transpose()?;
 
     // 4. Require am init when using containers
     if cfg.container.enabled && !no_container {
@@ -143,7 +144,7 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
     let use_container = cfg.container.enabled && !no_container;
     let (_runtime, container_cmd, session_container) = if use_container {
         // Credential check only applies when container will mount them
-        if let Some(ref agent) = effective_agent {
+        if let Some(agent) = effective_known_agent {
             container::validate_agent_credentials(agent)?;
         }
 
@@ -159,12 +160,12 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
             slug,
             &repo_root,
             &vcs,
-            effective_agent.as_deref(),
+            effective_known_agent,
             cfg.container.gitconfig.as_deref(),
             cfg.container.ssh.as_deref(),
         )?;
 
-        let extra_env = if let Some(ref agent) = effective_agent {
+        let extra_env = if let Some(agent) = effective_known_agent {
             container::agent_extra_env(agent)?
         } else {
             vec![]
@@ -180,8 +181,8 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
         );
 
         // Append the agent as the container CMD so it launches automatically
-        if let Some(ref agent) = effective_agent {
-            cmd.push(agent.clone());
+        if let Some(agent) = effective_known_agent {
+            cmd.push(agent.to_string());
             if auto {
                 cmd.extend(container::agent_auto_flags(agent));
             }
