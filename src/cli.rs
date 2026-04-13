@@ -7,6 +7,9 @@ fn validate_slug(s: &str) -> Result<String, String> {
             s.len()
         ));
     }
+    if !s.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
+        return Err("slug must start with a lowercase letter or digit".to_string());
+    }
     if !s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-') {
         return Err("slug may only contain lowercase letters, digits, underscores, and hyphens".to_string());
     }
@@ -99,5 +102,13 @@ mod tests {
         assert!(validate_slug("MyFeature").is_err());  // uppercase
         assert!(validate_slug("feat!").is_err());       // special char
         assert!(validate_slug("feat/sub").is_err());    // slash
+    }
+
+    #[test]
+    fn slug_must_start_with_alphanumeric() {
+        assert!(validate_slug("-leading-dash").is_err());
+        assert!(validate_slug("_leading_underscore").is_err());
+        assert!(validate_slug("a-leading-letter").is_ok());
+        assert!(validate_slug("1-leading-digit").is_ok());
     }
 }
