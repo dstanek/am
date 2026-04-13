@@ -234,50 +234,10 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
         // Keep focus on the shell pane.
         tmux::select_pane(&tmux::get_pane_id(&window_name, shell_pane_idx))?;
         (orig_window, orig_dir)
-    } else if let Some(ref cmd) = container_cmd {
-        // Not in tmux — record the session first, then replace this process with the container.
-        // Recording before exec ensures the session is always tracked; if exec fails the user
-        // can run 'am destroy <slug>' to clean up.
-        let new_session = session::Session {
-            slug: slug.to_string(),
-            created_at: chrono::Utc::now(),
-            auto,
-            vcs: session::VcsMetadata {
-                branch: format!("am/{slug}"),
-                worktree_path: worktree_path.clone(),
-            },
-            tmux: session::TmuxMetadata {
-                tmux_window: window_name.clone(),
-                agent_pane: tmux::get_pane_id(&format!("am-{slug}"), agent_pane_idx),
-                shell_pane: tmux::get_pane_id(&format!("am-{slug}"), shell_pane_idx),
-                original_window_name: None,
-                original_shell_dir: None,
-            },
-            container: session_container,
-        };
-        session::add_session(&repo_root, new_session)?;
-        println!("Started session '{slug}'");
-        println!("  worktree:  {}", worktree_path.display());
-        println!("  container: am-{slug}");
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            let err = std::process::Command::new(&cmd[0])
-                .args(&cmd[1..])
-                .exec();
-            // exec() only returns on failure
-            return Err(error::AmError::ContainerError(format!("failed to exec container: {err}")).into());
-        }
-        #[cfg(not(unix))]
-        {
-            let status = std::process::Command::new(&cmd[0])
-                .args(&cmd[1..])
-                .status()
-                .map_err(|e| error::AmError::ContainerError(format!("failed to run container: {e}")))?;
-            std::process::exit(status.code().unwrap_or(1));
-        }
     } else {
-        println!("Note: not inside tmux — no window opened. Run 'am attach {slug}' from inside tmux to open one.");
+        if container_cmd.is_none() {
+            println!("Note: not inside tmux — no window opened. Run 'am attach {slug}' from inside tmux to open one.");
+        }
         (None, None)
     };
 
@@ -298,6 +258,36 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
         },
         container: session_container,
     };
+
+    // Not in tmux with a container: record the session then replace this process.
+    // Recording before exec ensures the session is always tracked; if exec fails
+    // the user can run 'am destroy <slug>' to clean up.
+    if let Some(ref cmd) = container_cmd {
+        if !tmux::is_in_tmux() {
+            session::add_session(&repo_root, new_session)?;
+            println!("Started session '{slug}'");
+            println!("  worktree:  {}", worktree_path.display());
+            println!("  container: am-{slug}");
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::CommandExt;
+                let err = std::process::Command::new(&cmd[0])
+                    .args(&cmd[1..])
+                    .exec();
+                // exec() only returns on failure
+                return Err(error::AmError::ContainerError(format!("failed to exec container: {err}")).into());
+            }
+            #[cfg(not(unix))]
+            {
+                let status = std::process::Command::new(&cmd[0])
+                    .args(&cmd[1..])
+                    .status()
+                    .map_err(|e| error::AmError::ContainerError(format!("failed to run container: {e}")))?;
+                std::process::exit(status.code().unwrap_or(1));
+            }
+        }
+    }
+
     session::add_session(&repo_root, new_session)?;
 
     println!("Started session '{slug}'");
