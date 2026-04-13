@@ -183,6 +183,8 @@ jobs:
     name: Update Homebrew Tap
     needs: release
     runs-on: ubuntu-latest
+    env:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -217,11 +219,18 @@ jobs:
           echo "SHA_LINUX_X86=$(sha256sum artifacts/am-x86_64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)" >> $GITHUB_ENV
           echo "SHA_LINUX_ARM=$(sha256sum artifacts/am-aarch64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)" >> $GITHUB_ENV
 
+      - name: Validate tap token
+        run: |
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN is not set. Configure a fine-grained PAT with Contents: Read and write and Pull requests: Read and write access to dstanek/homebrew-am."
+            exit 1
+          fi
+
       - name: Clone tap repo
         uses: actions/checkout@v4
         with:
           repository: dstanek/homebrew-am
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          token: ${{ env.HOMEBREW_TAP_TOKEN }}
           path: homebrew-am
 
       - name: Render formula
@@ -238,16 +247,23 @@ jobs:
       - name: Open PR against tap repo
         working-directory: homebrew-am
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ env.HOMEBREW_TAP_TOKEN }}
         run: |
           VERSION=${{ needs.release.outputs.version }}
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/dstanek/homebrew-am.git"
           git checkout -b "release/v${VERSION}"
           git add Formula/am.rb
           git commit -m "chore: update am to v${VERSION}"
           git push origin "release/v${VERSION}"
-          gh pr create \
-            --title "Update am to v${VERSION}" \
-            --body "Automated formula update for [release v${VERSION}](https://github.com/dstanek/agent-manager/releases/tag/v${VERSION})." \
-            --repo dstanek/homebrew-am
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/repos/dstanek/homebrew-am/pulls" \
+            -f title="Update am to v${VERSION}" \
+            -f body="Automated formula update for [release v${VERSION}](https://github.com/dstanek/agent-manager/releases/tag/v${VERSION})." \
+            -f head="release/v${VERSION}" \
+            -f base="main" \
+            --jq '.html_url'
