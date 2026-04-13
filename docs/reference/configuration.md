@@ -73,7 +73,6 @@ Environment variables override both the global and project configs and are usefu
 | `AM_CONTAINER_NETWORK` | `container.network` | `full`, `none` | `AM_CONTAINER_NETWORK=none` |
 | `AM_CONTAINER_GITCONFIG` | `container.gitconfig` | directory path | `AM_CONTAINER_GITCONFIG=/custom/.gitconfig` |
 | `AM_CONTAINER_SSH` | `container.ssh` | directory path | `AM_CONTAINER_SSH=/custom/.ssh` |
-| `AM_CONTAINER_STARTUP_DELAY_MS` | `container.startup_delay_ms` | non-negative integer | `AM_CONTAINER_STARTUP_DELAY_MS=1000` |
 | `CLAUDE_CONFIG_DIR` | (none) | directory path | `CLAUDE_CONFIG_DIR=/custom/.claude` |
 
 !!! note "Mount path customization"

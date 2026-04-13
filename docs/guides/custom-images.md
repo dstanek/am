@@ -43,7 +43,7 @@ Whatever base image you choose, **the agent binary must be present on the contai
 | `gemini` | `gemini` |
 | `codex` | `codex` |
 
-For unknown agent names (a raw command string), whatever binary you pass must exist in the image.
+Only these four agent names are valid. Using any other value with `--agent` will produce an error before any session is created.
 
 ---
 

@@ -12,7 +12,7 @@ One-page guide to common `am` commands, workflows, and configurations.
 | `am start <slug>` | Create a new agent session |
 | `am list` | Show all active sessions |
 | `am attach <slug>` | Switch to existing session |
-| `am run <slug> -- <cmd>` | Execute command in session |
+| `am run <slug> <agent>` | Launch agent in session's agent pane |
 | `am destroy <slug>` | Stop and remove session |
 | `am generate-config` | Show resolved configuration |
 
@@ -53,7 +53,7 @@ am list
 ```bash
 # Useful for scripts or CI/CD
 am start task --agent claude
-am run task -- your-command-here
+am run task claude
 am destroy task --force
 ```
 
@@ -285,7 +285,6 @@ enabled = true
 runtime = "auto"
 network = "full"
 env = []
-startup_delay_ms = 500
 ```
 
 ### CI/CD Integration (GitHub Actions)
@@ -297,7 +296,7 @@ startup_delay_ms = 500
   run: |
     am init
     am start agent --agent claude
-    am run agent -- your-command-here
+    am run agent claude
     am destroy agent --force
 ```
 
@@ -308,7 +307,6 @@ startup_delay_ms = 500
 | Tip | Benefit |
 |-----|---------|
 | Pre-pull image: `docker pull ghcr.io/dstanek/am-claude:latest` | Faster session startup |
-| Increase `startup_delay_ms` on slow machines | Reduces race conditions |
 | Use `--no-container` for debugging | Faster iteration (no container overhead) |
 | Configure `split_percent` to your preference | Better use of screen space |
 

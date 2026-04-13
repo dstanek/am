@@ -216,7 +216,6 @@ Causes:
 
 **Fixes:**
 - Pre-pull the image: `docker pull ghcr.io/dstanek/am-claude:latest`
-- Increase `startup_delay_ms` in config
 - Use `-minimal` images (smaller, faster)
 
 ---
@@ -325,7 +324,6 @@ Include:
 **Fixes:**
 - Use `-minimal` images
 - Pre-pull images
-- Increase `startup_delay_ms` if container isn't ready
 - Monitor container with `docker stats` / `podman stats`
 
 ### How much disk space does `am` use?

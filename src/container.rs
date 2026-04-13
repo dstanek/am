@@ -117,9 +117,7 @@ fn mount_str(host: &Path, container: &str, mode: MountMode, selinux: bool) -> St
 fn home_dir() -> Result<PathBuf> {
     std::env::var("HOME")
         .map(PathBuf::from)
-        .with_context(|| "HOME environment variable not set — cannot resolve user home directory for mounts")?
-        .canonicalize()
-        .with_context(|| "failed to resolve HOME path — does the directory exist and is it accessible?")
+        .with_context(|| "HOME environment variable not set — cannot resolve user home directory for mounts")
 }
 
 pub fn resolve_mounts(
@@ -250,8 +248,8 @@ pub fn agent_extra_env(agent: &str) -> Result<Vec<(String, String)>> {
     }
 }
 
-/// Validate that the agent name is a known preset or treat it as a raw command.
-/// Returns an error for names that look like they should be a preset but aren't.
+/// Validate that the agent name is a known preset.
+/// Returns an error for any unknown name listing the valid options.
 /// Call unconditionally in `am start` before any side effects.
 pub fn validate_agent_name(agent: &str) -> Result<()> {
     match agent {
@@ -298,20 +296,19 @@ pub fn validate_agent_credentials(agent: &str) -> Result<()> {
 
 // ── Command building ──────────────────────────────────────────────────────────
 
+#[cfg(unix)]
 fn get_host_uid_gid() -> Option<(u32, u32)> {
-    let uid = std::process::Command::new("id")
-        .arg("-u")
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .and_then(|s| s.trim().parse::<u32>().ok())?;
-    let gid = std::process::Command::new("id")
-        .arg("-g")
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .and_then(|s| s.trim().parse::<u32>().ok())?;
-    Some((uid, gid))
+    extern "C" {
+        fn getuid() -> u32;
+        fn getgid() -> u32;
+    }
+    // SAFETY: getuid/getgid have no preconditions and are always safe to call.
+    Some(unsafe { (getuid(), getgid()) })
+}
+
+#[cfg(not(unix))]
+fn get_host_uid_gid() -> Option<(u32, u32)> {
+    None
 }
 
 pub fn build_run_command(

@@ -203,6 +203,15 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
     };
     let window_name = format!("am-{slug}");
 
+    // Pane assignment: split-window creates a new pane at index 1.
+    // PaneSide::Right: agent in new pane (1), shell in original (0).
+    // PaneSide::Left:  agent in original pane (0), shell in new pane (1).
+    // The -p percent controls the size of the new pane.
+    let (agent_pane_idx, shell_pane_idx, new_pane_percent) = match cfg.tmux.agent_pane {
+        config::PaneSide::Right => (1usize, 0usize, cfg.tmux.split_percent),
+        config::PaneSide::Left  => (0usize, 1usize, 100 - cfg.tmux.split_percent),
+    };
+
     let (original_window_name, original_shell_dir) = if tmux::is_in_tmux() {
         // Capture the current window name and pane path before we rename/split.
         let orig_window = tmux::current_window_name().ok().filter(|s| !s.is_empty());
@@ -211,23 +220,45 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
             .map_err(|e| anyhow::anyhow!(
                 "{e}\nHint: a window named '{window_name}' may already exist — run 'am destroy {slug}' first"
             ))?;
-        // Split the current window; the new pane (index 1) becomes the agent pane.
-        tmux::split_window(&window_name, &worktree_path, &cfg.tmux.split)?;
+        tmux::split_window(&window_name, &worktree_path, &cfg.tmux.split, new_pane_percent)?;
         if let Some(ref cmd) = container_cmd {
-            tmux::send_keys(&tmux::get_pane_id(&window_name, 1), &cmd.join(" "))?;
+            tmux::send_keys(&tmux::get_pane_id(&window_name, agent_pane_idx), &cmd.join(" "))?;
         } else if let Some(ref agent) = effective_agent {
-            tmux::send_keys(&tmux::get_pane_id(&window_name, 1), agent)?;
+            tmux::send_keys(&tmux::get_pane_id(&window_name, agent_pane_idx), agent)?;
         }
         // cd the shell pane into the worktree.
         tmux::send_keys(
-            &tmux::get_pane_id(&window_name, 0),
+            &tmux::get_pane_id(&window_name, shell_pane_idx),
             &cd_cmd(&worktree_path),
         )?;
-        // Keep focus on the shell pane (pane 0 — the original pane the user was in).
-        tmux::select_pane(&tmux::get_pane_id(&window_name, 0))?;
+        // Keep focus on the shell pane.
+        tmux::select_pane(&tmux::get_pane_id(&window_name, shell_pane_idx))?;
         (orig_window, orig_dir)
     } else if let Some(ref cmd) = container_cmd {
-        // Not in tmux — run the container directly, replacing this process
+        // Not in tmux — record the session first, then replace this process with the container.
+        // Recording before exec ensures the session is always tracked; if exec fails the user
+        // can run 'am destroy <slug>' to clean up.
+        let new_session = session::Session {
+            slug: slug.to_string(),
+            created_at: chrono::Utc::now(),
+            auto,
+            vcs: session::VcsMetadata {
+                branch: format!("am/{slug}"),
+                worktree_path: worktree_path.clone(),
+            },
+            tmux: session::TmuxMetadata {
+                tmux_window: window_name.clone(),
+                agent_pane: tmux::get_pane_id(&format!("am-{slug}"), agent_pane_idx),
+                shell_pane: tmux::get_pane_id(&format!("am-{slug}"), shell_pane_idx),
+                original_window_name: None,
+                original_shell_dir: None,
+            },
+            container: session_container,
+        };
+        session::add_session(&repo_root, new_session)?;
+        println!("Started session '{slug}'");
+        println!("  worktree:  {}", worktree_path.display());
+        println!("  container: am-{slug}");
         #[cfg(unix)]
         {
             use std::os::unix::process::CommandExt;
@@ -260,8 +291,8 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
         },
         tmux: session::TmuxMetadata {
             tmux_window: window_name,
-            agent_pane: format!("am-{slug}.1"),
-            shell_pane: format!("am-{slug}.0"),
+            agent_pane: tmux::get_pane_id(&format!("am-{slug}"), agent_pane_idx),
+            shell_pane: tmux::get_pane_id(&format!("am-{slug}"), shell_pane_idx),
             original_window_name,
             original_shell_dir,
         },
@@ -341,8 +372,12 @@ fn cmd_attach(slug: &str) -> anyhow::Result<()> {
             .map_err(|e| anyhow::anyhow!(
                 "{e}\nHint: a window named '{window_name}' may already exist — run 'am destroy {slug}' first"
             ))?;
-        tmux::split_window(&window_name, &s.vcs.worktree_path, &cfg.tmux.split)?;
-        tmux::select_pane(&tmux::get_pane_id(&window_name, 0))?;
+        let (shell_pane_idx, new_pane_percent) = match cfg.tmux.agent_pane {
+            config::PaneSide::Right => (0usize, cfg.tmux.split_percent),
+            config::PaneSide::Left  => (1usize, 100 - cfg.tmux.split_percent),
+        };
+        tmux::split_window(&window_name, &s.vcs.worktree_path, &cfg.tmux.split, new_pane_percent)?;
+        tmux::select_pane(&tmux::get_pane_id(&window_name, shell_pane_idx))?;
         tmux::select_window(&window_name)?;
         println!("Opened new window for session '{slug}'.");
     } else {
@@ -376,18 +411,15 @@ fn cmd_destroy(slug: &str, force: bool) -> anyhow::Result<()> {
     let (repo_root, vcs) = find_repo_root()?;
     let sessions = session::load_sessions(&repo_root)?;
 
-    if session::find_session(&sessions, slug).is_none() {
-        return Err(error::AmError::SlugNotFound(slug.to_string()).into());
-    }
+    let s = session::find_session(&sessions, slug)
+        .ok_or_else(|| error::AmError::SlugNotFound(slug.to_string()))?;
 
     if !force {
         // Warn about uncommitted changes in git worktrees only.
-        if matches!(vcs, config::Vcs::Git) {
-            if let Some(s) = session::find_session(&sessions, slug) {
-                if worktree::git_worktree_has_changes(&s.vcs.worktree_path) {
-                    eprintln!("\x1b[31mWarning: the worktree has uncommitted changes that will be lost.\x1b[0m");
-                }
-            }
+        if matches!(vcs, config::Vcs::Git)
+            && worktree::git_worktree_has_changes(&s.vcs.worktree_path)
+        {
+            eprintln!("\x1b[31mWarning: the worktree has uncommitted changes that will be lost.\x1b[0m");
         }
         print!("Remove worktree and kill tmux window for '{slug}'? [y/N] ");
         std::io::stdout().flush()?;
@@ -400,21 +432,19 @@ fn cmd_destroy(slug: &str, force: bool) -> anyhow::Result<()> {
     }
 
     // Stop and remove container if one was recorded for this session
-    if let Some(s) = session::find_session(&sessions, slug) {
-        if let Some(ref sc) = s.container {
-            let pref = match sc.runtime.as_str() {
-                "docker" => config::RuntimePreference::Docker,
-                _ => config::RuntimePreference::Podman,
-            };
-            if let Ok(rt) = container::detect_runtime(pref) {
-                let _ = container::stop_container(&rt, &format!("am-{slug}"));
-                let _ = container::remove_container(&rt, &format!("am-{slug}"));
-            }
+    if let Some(ref sc) = s.container {
+        let pref = match sc.runtime.as_str() {
+            "docker" => config::RuntimePreference::Docker,
+            _ => config::RuntimePreference::Podman,
+        };
+        if let Ok(rt) = container::detect_runtime(pref) {
+            let _ = container::stop_container(&rt, &format!("am-{slug}"));
+            let _ = container::remove_container(&rt, &format!("am-{slug}"));
         }
     }
 
     // Clean up the tmux window (ignore errors — window/pane may not exist)
-    if let Some(s) = session::find_session(&sessions, slug) {
+    {
         if s.tmux.original_window_name.is_some() {
             // New-style session: cd shell pane back, kill agent pane, restore window name.
             if let Some(ref orig_dir) = s.tmux.original_shell_dir {

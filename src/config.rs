@@ -213,18 +213,23 @@ struct FileConfig {
     container: FileContainer,
 }
 
+/// Overwrite `target` with `value` when present. `target` is a plain `T` (not `Option<T>`).
 fn apply_opt<T: Clone>(target: &mut T, value: Option<T>) {
     if let Some(v) = value {
         *target = v;
     }
 }
 
+/// Overwrite `target` with `Some(value)` when present. `target` is an `Option<T>`;
+/// any non-None value (including empty paths) is accepted.
 fn apply_opt_some<T: Clone>(target: &mut Option<T>, value: Option<T>) {
     if let Some(v) = value {
         *target = Some(v);
     }
 }
 
+/// Overwrite `target` with `Some(value)` when present and non-empty.
+/// Empty strings are ignored so that a blank config entry does not clear an existing value.
 fn apply_opt_string(target: &mut Option<String>, value: Option<String>) {
     if let Some(v) = value {
         if !v.is_empty() {

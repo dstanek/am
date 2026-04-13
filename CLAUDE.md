@@ -23,7 +23,7 @@ make build-copilot       # Build Copilot Docker image
 - `config.rs` — layered config: CLI flags → env vars → `.am/config.toml` → `~/.config/am/config.toml` → defaults
 - `error.rs` — `AmError` enum via `thiserror`; all functions return `anyhow::Result<T>`
 - `session.rs` — session CRUD; state in `.am/sessions.json`
-- `worktree.rs` — git (`git worktree add`) and jj (`jj workspace add`) operations
+- `worktree.rs` — git (`git worktree add`) and jj (`jj workspace add`) operations; VCS detection (`find_repo_root`) is in `main.rs`
 - `tmux.rs` — tmux window/pane management
 - `container.rs` — Podman/Docker lifecycle; mount resolution; agent auth presets
 - `main.rs` — command handlers (`cmd_init`, `cmd_start`, `cmd_list`, `cmd_attach`, `cmd_run`, `cmd_destroy`, `cmd_generate_config`)
@@ -32,7 +32,7 @@ make build-copilot       # Build Copilot Docker image
 
 **Container mounts:** git repos use `GIT_DIR`/`GIT_WORK_TREE` env vars; jj repos mirror host path structure. See `container.rs`.
 
-**Agent auth presets** (`claude`, `copilot`, `gemini`, `codex`) mount credentials at runtime. Unknown agent names are raw executable commands with no auth.
+**Agent auth presets** (`claude`, `copilot`, `gemini`, `codex`) mount credentials at runtime. Unknown agent names are rejected early with a clear error listing valid agents.
 
 ## Testing
 
