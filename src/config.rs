@@ -103,6 +103,7 @@ pub struct ContainerConfig {
     pub env: Vec<String>,
     pub gitconfig: Option<PathBuf>, // None = ~/.gitconfig
     pub ssh: Option<PathBuf>,       // None = ~/.ssh
+    pub user: String,               // container username (default: "am")
 }
 
 impl Default for ContainerConfig {
@@ -116,6 +117,7 @@ impl Default for ContainerConfig {
             env: Vec::new(),
             gitconfig: None,
             ssh: None,
+            user: "am".to_string(),
         }
     }
 }
@@ -199,6 +201,7 @@ struct FileContainer {
     env: Option<Vec<String>>,
     gitconfig: Option<PathBuf>,
     ssh: Option<PathBuf>,
+    user: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -260,6 +263,11 @@ fn apply_file_config(base: &mut Config, file: FileConfig) {
     apply_opt(&mut base.container.env, file.container.env);
     apply_opt_some(&mut base.container.gitconfig, file.container.gitconfig);
     apply_opt_some(&mut base.container.ssh, file.container.ssh);
+    if let Some(u) = file.container.user {
+        if !u.is_empty() {
+            base.container.user = u;
+        }
+    }
 }
 
 fn parse_config_file(path: &Path) -> Result<FileConfig> {
@@ -319,6 +327,7 @@ pub fn write_defaults(path: &Path) -> Result<()> {
 # gitconfig = ""         # path to gitconfig to mount (default: ~/.gitconfig)
 # ssh = ""               # path to SSH dir to mount (default: ~/.ssh)
 # image = ""             # override image for all agents (advanced; prefer [agents.<name>].image)
+# user = "am"            # username inside the container (used for credential mount paths)
 "#;
     std::fs::write(path, content)?;
     Ok(())
@@ -335,7 +344,7 @@ pub fn global_config_template() -> &'static str {
 #   AM_VCS, AM_AGENT
 #   AM_TMUX_AGENT_PANE, AM_TMUX_SPLIT, AM_TMUX_SPLIT_PERCENT
 #   AM_CONTAINER_ENABLED, AM_CONTAINER_RUNTIME, AM_CONTAINER_IMAGE,
-#   AM_CONTAINER_AGENT, AM_CONTAINER_NETWORK
+#   AM_CONTAINER_AGENT, AM_CONTAINER_NETWORK, AM_CONTAINER_USER
 
 [defaults]
 vcs = "git"            # "git" | "jj"
@@ -365,6 +374,7 @@ env = []               # extra environment variables passed into the container, 
 # gitconfig = ""        # path to gitconfig to mount (default: ~/.gitconfig)
 # ssh = ""              # path to SSH dir to mount (default: ~/.ssh)
 # image = ""            # override image for all agents (advanced; prefer [agents.<name>].image above)
+# user = "am"           # username inside the container (used for credential mount paths)
 "#
 }
 
@@ -445,6 +455,11 @@ fn apply_env_vars(config: &mut Config) {
     if let Ok(val) = std::env::var("AM_CONTAINER_SSH") {
         if !val.is_empty() {
             config.container.ssh = Some(PathBuf::from(val));
+        }
+    }
+    if let Ok(val) = std::env::var("AM_CONTAINER_USER") {
+        if !val.is_empty() {
+            config.container.user = val;
         }
     }
 }

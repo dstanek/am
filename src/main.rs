@@ -163,6 +163,7 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
             effective_known_agent,
             cfg.container.gitconfig.as_deref(),
             cfg.container.ssh.as_deref(),
+            &cfg.container.user,
         )?;
 
         let extra_env = if let Some(agent) = effective_known_agent {

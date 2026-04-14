@@ -138,7 +138,7 @@ Mark sub-tasks `[x]` as completed. Mark the feature header `[x]` only after the 
 > Mount `~/.claude` into the container and optionally auto-launch `claude` in the agent pane.
 
 - [x] **Design**
-  - [x] Auth preset: `claude` → `~/.claude:/root/.claude:ro`
+  - [x] Auth preset: `claude` → `~/.claude:/home/<user>/.claude:rw` and `~/.claude.json:/home/<user>/.claude.json:rw` (container user is configurable, default `am`)
   - [x] Agent auto-launch flow: container start → 500ms delay → `send_keys "claude" Enter`
   - [x] `config.agent = "claude"` vs `--agent claude` precedence (`--agent` > `config.container.agent` > `config.agent`)
   - [x] `am run <slug> claude` for manual launch in existing session

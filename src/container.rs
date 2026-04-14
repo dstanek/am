@@ -96,6 +96,7 @@ pub struct ContainerMounts {
     pub gitconfig_host: PathBuf,              // .am/gitconfig (or override)
     pub ssh_host: PathBuf,                    // ~/.ssh
     pub agent_auth: Vec<AgentAuthMount>,
+    pub container_user: String,               // username inside the container
 }
 
 // ── Runtime detection ─────────────────────────────────────────────────────────
@@ -175,6 +176,7 @@ pub fn resolve_mounts(
     agent: Option<KnownAgent>,
     gitconfig: Option<&Path>,
     ssh: Option<&Path>,
+    container_user: &str,
 ) -> Result<ContainerMounts> {
     let home = home_dir()?;
     let worktree_host = repo_root.join(".am").join("worktrees").join(slug);
@@ -200,7 +202,9 @@ pub fn resolve_mounts(
     let ssh_host = ssh
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| home.join(".ssh"));
-    let agent_auth = agent.map(resolve_agent_auth_mount).unwrap_or_default();
+    let agent_auth = agent
+        .map(|a| resolve_agent_auth_mount(a, container_user))
+        .unwrap_or_default();
 
     Ok(ContainerMounts {
         worktree_host,
@@ -209,14 +213,16 @@ pub fn resolve_mounts(
         gitconfig_host,
         ssh_host,
         agent_auth,
+        container_user: container_user.to_string(),
     })
 }
 
-pub fn resolve_agent_auth_mount(agent: KnownAgent) -> Vec<AgentAuthMount> {
+pub fn resolve_agent_auth_mount(agent: KnownAgent, container_user: &str) -> Vec<AgentAuthMount> {
     let home = match home_dir() {
         Ok(h) => h,
         Err(_) => return vec![],
     };
+    let home_in_container = format!("/home/{container_user}");
     match agent {
         KnownAgent::Claude => {
             // Config dir: use CLAUDE_CONFIG_DIR if set, otherwise ~/.claude
@@ -226,12 +232,12 @@ pub fn resolve_agent_auth_mount(agent: KnownAgent) -> Vec<AgentAuthMount> {
             vec![
                 AgentAuthMount {
                     host_path: config_host,
-                    container_path: PathBuf::from("/home/am/.claude"),
+                    container_path: PathBuf::from(format!("{home_in_container}/.claude")),
                     mode: MountMode::ReadWrite,
                 },
                 AgentAuthMount {
                     host_path: home.join(".claude.json"),
-                    container_path: PathBuf::from("/home/am/.claude.json"),
+                    container_path: PathBuf::from(format!("{home_in_container}/.claude.json")),
                     mode: MountMode::ReadWrite,
                 },
             ]
@@ -240,18 +246,18 @@ pub fn resolve_agent_auth_mount(agent: KnownAgent) -> Vec<AgentAuthMount> {
             AgentAuthMount {
                 // GitHub CLI auth token (required for Copilot authentication)
                 host_path: home.join(".config").join("gh"),
-                container_path: PathBuf::from("/home/am/.config/gh"),
+                container_path: PathBuf::from(format!("{home_in_container}/.config/gh")),
                 mode: MountMode::ReadOnly,
             },
             AgentAuthMount {
                 host_path: home.join(".config").join("github-copilot"),
-                container_path: PathBuf::from("/home/am/.config/github-copilot"),
+                container_path: PathBuf::from(format!("{home_in_container}/.config/github-copilot")),
                 mode: MountMode::ReadOnly,
             },
         ],
         KnownAgent::Gemini => vec![AgentAuthMount {
             host_path: home.join(".gemini"),
-            container_path: PathBuf::from("/home/am/.gemini"),
+            container_path: PathBuf::from(format!("{home_in_container}/.gemini")),
             mode: MountMode::ReadOnly,
         }],
         KnownAgent::Codex => vec![], // env-var only, no filesystem mount
@@ -352,6 +358,7 @@ pub fn build_run_command(
     network: &NetworkMode,
     container_name: &str,
 ) -> Vec<String> {
+    let container_user = &mounts.container_user;
     let selinux = use_selinux_labels(runtime);
     let mut cmd = vec![
         runtime.bin.to_string_lossy().into_owned(),
@@ -404,7 +411,7 @@ pub fn build_run_command(
         cmd.push("-v".to_string());
         cmd.push(mount_str(
             &mounts.gitconfig_host,
-            "/home/am/.gitconfig",
+            &format!("/home/{container_user}/.gitconfig"),
             MountMode::ReadOnly,
             selinux,
         ));
@@ -415,7 +422,7 @@ pub fn build_run_command(
         cmd.push("-v".to_string());
         cmd.push(mount_str(
             &mounts.ssh_host,
-            "/home/am/.ssh",
+            &format!("/home/{container_user}/.ssh"),
             MountMode::ReadOnly,
             selinux,
         ));
@@ -563,6 +570,7 @@ mod tests {
             gitconfig_host: tmp.join(".gitconfig"),
             ssh_host: tmp.join(".ssh"),
             agent_auth: vec![],
+            container_user: "am".to_string(),
         }
     }
 
@@ -656,7 +664,7 @@ mod tests {
         std::env::set_var("HOME", tmp.path());
 
         let repo_root = tmp.path().join("repo");
-        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Git, None::<KnownAgent>, None, None).unwrap();
+        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Git, None::<KnownAgent>, None, None, "am").unwrap();
 
         assert_eq!(mounts.worktree_host, repo_root.join(".am/worktrees/feat"));
         assert_eq!(mounts.vcs_host, repo_root.join(".git"));
@@ -675,7 +683,7 @@ mod tests {
 
         let repo_root = tmp.path().join("repo");
         std::fs::create_dir_all(repo_root.join(".git")).unwrap();
-        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Jj, None::<KnownAgent>, None, None).unwrap();
+        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Jj, None::<KnownAgent>, None, None, "am").unwrap();
 
         assert_eq!(mounts.colocated_git_host, Some(repo_root.join(".git")));
 
@@ -689,7 +697,7 @@ mod tests {
         std::env::set_var("HOME", tmp.path());
 
         let repo_root = tmp.path().join("repo");
-        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Jj, None::<KnownAgent>, None, None).unwrap();
+        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Jj, None::<KnownAgent>, None, None, "am").unwrap();
 
         assert_eq!(mounts.colocated_git_host, None);
 
@@ -727,7 +735,7 @@ mod tests {
         std::env::set_var("HOME", tmp.path());
         std::env::remove_var("CLAUDE_CONFIG_DIR");
 
-        let mounts = resolve_mounts("feat", tmp.path(), &Vcs::Git, Some(KnownAgent::Claude), None, None).unwrap();
+        let mounts = resolve_mounts("feat", tmp.path(), &Vcs::Git, Some(KnownAgent::Claude), None, None, "am").unwrap();
         assert_eq!(mounts.agent_auth.len(), 2);
         assert_eq!(mounts.agent_auth[0].host_path, tmp.path().join(".claude"));
         assert_eq!(
@@ -981,7 +989,7 @@ mod tests {
         std::env::set_var("HOME", tmp.path());
         std::env::remove_var("CLAUDE_CONFIG_DIR");
 
-        let mounts = resolve_agent_auth_mount(KnownAgent::Claude);
+        let mounts = resolve_agent_auth_mount(KnownAgent::Claude, "am");
         assert_eq!(mounts.len(), 2);
         assert_eq!(mounts[0].host_path, tmp.path().join(".claude"));
         assert_eq!(mounts[0].container_path, PathBuf::from("/home/am/.claude"));
@@ -1004,7 +1012,7 @@ mod tests {
         std::env::set_var("HOME", tmp.path());
         std::env::set_var("CLAUDE_CONFIG_DIR", &custom_config);
 
-        let mounts = resolve_agent_auth_mount(KnownAgent::Claude);
+        let mounts = resolve_agent_auth_mount(KnownAgent::Claude, "am");
         assert_eq!(mounts.len(), 2);
         assert_eq!(mounts[0].host_path, custom_config);
         assert_eq!(mounts[0].container_path, PathBuf::from("/home/am/.claude"));
@@ -1169,7 +1177,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
-        let mounts = resolve_agent_auth_mount(KnownAgent::Copilot);
+        let mounts = resolve_agent_auth_mount(KnownAgent::Copilot, "am");
         assert_eq!(mounts.len(), 2);
 
         let paths: Vec<_> = mounts.iter().map(|m| m.host_path.clone()).collect();
@@ -1199,7 +1207,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
-        let mounts = resolve_agent_auth_mount(KnownAgent::Copilot);
+        let mounts = resolve_agent_auth_mount(KnownAgent::Copilot, "am");
         let container_paths: Vec<_> = mounts.iter().map(|m| m.container_path.clone()).collect();
         assert!(container_paths.contains(&PathBuf::from("/home/am/.config/gh")));
         assert!(container_paths.contains(&PathBuf::from("/home/am/.config/github-copilot")));
@@ -1213,7 +1221,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
-        let mounts = resolve_agent_auth_mount(KnownAgent::Gemini);
+        let mounts = resolve_agent_auth_mount(KnownAgent::Gemini, "am");
         assert_eq!(mounts.len(), 1);
         assert_eq!(mounts[0].host_path, tmp.path().join(".gemini"));
         assert_eq!(mounts[0].container_path, PathBuf::from("/home/am/.gemini"));
@@ -1228,7 +1236,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
-        assert!(resolve_agent_auth_mount(KnownAgent::Codex).is_empty());
+        assert!(resolve_agent_auth_mount(KnownAgent::Codex, "am").is_empty());
 
         std::env::remove_var("HOME");
     }
