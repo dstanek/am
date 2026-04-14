@@ -148,9 +148,12 @@ Controls container lifecycle and what gets mounted or exposed inside the contain
 |---|---|---|---|---|
 | `enabled` | boolean | `true` | Whether to run sessions inside a container | `true`, `false` |
 | `runtime` | string | `"auto"` | Container runtime to use; `"auto"` tries Podman first, then Docker | `"auto"`, `"podman"`, `"docker"` |
+| `agent` | string | `""` | Agent to run inside the container; overrides `defaults.agent` when container mode is active | Any known agent name, e.g. `"claude"` |
 | `image` | string | `""` | Override image for all agents; takes priority over `[agents.<name>].image`; leave unset to use the per-agent default | Any valid image reference |
 | `network` | string | `"full"` | Network access mode for the container | `"full"` (unrestricted internet access), `"none"` (no network) |
 | `env` | list of strings | `[]` | Extra environment variables passed into the container from the host shell | e.g. `["ANTHROPIC_API_KEY", "FOO=bar"]` |
+| `gitconfig` | path | `""` | Host path to a gitconfig file to mount into the container; defaults to `.am/gitconfig` in the repo root | Any valid file path |
+| `ssh` | path | `""` | Host path to an SSH directory to mount into the container; defaults to `~/.ssh` | Any valid directory path |
 | `user` | string | `"am"` | Username used when building credential mount paths inside the container, such as `/home/<user>/.ssh` and `/home/<user>/.gitconfig` | safe username (`[a-z_][a-z0-9_-]*`) |
 
 !!! note "Image selection"
