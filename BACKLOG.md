@@ -11,9 +11,12 @@ Outstanding work for `am`. Items are grouped by theme and roughly ordered by pri
 
 Env-var-only auth preset for OpenAI Codex — no filesystem mount needed.
 
-- [ ] Design: no mount; auth via `OPENAI_API_KEY` env var pass-through; `validate_agent("codex")` must pass
-- [ ] Tests: `resolve_agent_auth_mount("codex")` returns `None`; `build_run_command` includes `-e OPENAI_API_KEY` when codex preset active
-- [ ] Implementation: `codex` branch in `resolve_agent_auth_mount()`; env-var injection logic for env-var-only presets
+**Partially implemented.** `KnownAgent::Codex` is accepted, credential validation is a no-op (correct — no filesystem check needed), and `resolve_agent_auth_mount` returns an empty vec (correct). What remains:
+
+- [x] Design: no mount; auth via `OPENAI_API_KEY` env var pass-through; `validate_agent("codex")` must pass
+- [x] Implementation: `codex` branch in `resolve_agent_auth_mount()` returns empty vec
+- [ ] Implementation: `agent_extra_env` for `codex` should inject `OPENAI_API_KEY` from the host environment
+- [ ] Tests: `build_run_command` includes `-e OPENAI_API_KEY` when codex preset active
 - [ ] UX Review: `am start feat --agent codex` passes `OPENAI_API_KEY` into the container; no spurious mount errors
 
 ---
@@ -21,12 +24,14 @@ Env-var-only auth preset for OpenAI Codex — no filesystem mount needed.
 ### Feature 8: Gemini Integration
 > Spec: [`specs/gemini-integration.md`](specs/gemini-integration.md)
 
-Auth mount preset for Google Gemini CLI: `~/.gemini:/root/.gemini:ro`.
+Auth mount preset for Google Gemini CLI.
 
-- [ ] Design: preset `~/.gemini:/root/.gemini:ro`; `validate_agent("gemini")` must pass
-- [ ] Tests: `resolve_agent_auth_mount("gemini")` returns correct host/container paths; `build_run_command` includes gemini mount when preset active
-- [ ] Implementation: `gemini` branch in `resolve_agent_auth_mount()`
-- [ ] UX Review: `am start feat --agent gemini` launches a container with `~/.gemini` mounted read-only; graceful handling if `~/.gemini` doesn't exist (warn, don't fail)
+**Fully implemented.** `KnownAgent::Gemini` is accepted, `~/.gemini` is mounted at `/home/<user>/.gemini` read-only, `validate_agent_credentials` checks the directory exists, and missing directories are silently skipped (no mount error).
+
+- [x] Design: mount preset `~/.gemini:/home/<user>/.gemini:ro`; `validate_agent("gemini")` must pass
+- [x] Tests: `resolve_agent_auth_mount("gemini")` returns correct host/container paths; mount included in `build_run_command`
+- [x] Implementation: `gemini` branch in `resolve_agent_auth_mount()`
+- [x] UX Review: `am start feat --agent gemini` launches a container with `~/.gemini` mounted read-only; graceful skip if `~/.gemini` doesn't exist
 
 ---
 
