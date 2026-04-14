@@ -71,12 +71,13 @@ Environment variables override both the global and project configs and are usefu
 | `AM_CONTAINER_AGENT` | `container.agent` | any non-empty string | `AM_CONTAINER_AGENT=claude` |
 | `AM_CONTAINER_IMAGE` | `container.image` | any non-empty string | `AM_CONTAINER_IMAGE=my-image:latest` |
 | `AM_CONTAINER_NETWORK` | `container.network` | `full`, `none` | `AM_CONTAINER_NETWORK=none` |
+| `AM_CONTAINER_USER` | `container.user` | safe username (`[a-z_][a-z0-9_-]*`) | `AM_CONTAINER_USER=am` |
 | `AM_CONTAINER_GITCONFIG` | `container.gitconfig` | directory path | `AM_CONTAINER_GITCONFIG=/custom/.gitconfig` |
 | `AM_CONTAINER_SSH` | `container.ssh` | directory path | `AM_CONTAINER_SSH=/custom/.ssh` |
 | `CLAUDE_CONFIG_DIR` | (none) | directory path | `CLAUDE_CONFIG_DIR=/custom/.claude` |
 
 !!! note "Mount path customization"
-    The `AM_CONTAINER_GITCONFIG` and `AM_CONTAINER_SSH` variables allow you to override where `am` looks for your git and SSH configuration on the host, and where they are mounted inside the container. `CLAUDE_CONFIG_DIR` allows you to override the Claude configuration directory location. These are rarely needed unless you have a non-standard directory structure.
+    The `AM_CONTAINER_GITCONFIG` and `AM_CONTAINER_SSH` variables allow you to override where `am` looks for your git and SSH configuration on the host. `AM_CONTAINER_USER` changes the username used when constructing mount targets inside the container, such as `/home/<user>/.ssh` and `/home/<user>/.gitconfig`, and must be a safe username. `CLAUDE_CONFIG_DIR` allows you to override the Claude configuration directory location. These are rarely needed unless you have a non-standard directory structure.
 
 ---
 
@@ -150,6 +151,7 @@ Controls container lifecycle and what gets mounted or exposed inside the contain
 | `image` | string | `""` | Override image for all agents; takes priority over `[agents.<name>].image`; leave unset to use the per-agent default | Any valid image reference |
 | `network` | string | `"full"` | Network access mode for the container | `"full"` (unrestricted internet access), `"none"` (no network) |
 | `env` | list of strings | `[]` | Extra environment variables passed into the container from the host shell | e.g. `["ANTHROPIC_API_KEY", "FOO=bar"]` |
+| `user` | string | `"am"` | Username used when building credential mount paths inside the container, such as `/home/<user>/.ssh` and `/home/<user>/.gitconfig` | safe username (`[a-z_][a-z0-9_-]*`) |
 
 !!! note "Image selection"
     In most cases you do not need to set `container.image`. `am` resolves the image from the active agent via `[agents.<name>].image`, with built-in defaults for `claude` and `copilot`. Set `container.image` only when you want a single image to apply regardless of which agent is selected.

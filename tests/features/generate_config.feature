@@ -5,3 +5,5 @@ Feature: am generate-config — print global config template
     Then the command succeeds
     And the output contains "[container]"
     And the output contains "[tmux]"
+    And the output contains "AM_CONTAINER_USER"
+    And the output contains "username inside the container"

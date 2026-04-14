@@ -485,6 +485,20 @@ fn validate_env_passthrough(env: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn validate_container_user(user: &str) -> Result<()> {
+    let valid = !user.is_empty()
+        && user.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c == '_')
+        && user
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-');
+    if !valid {
+        return Err(anyhow::anyhow!(
+            "invalid container.user '{user}': must start with a lowercase letter or underscore and contain only lowercase letters, digits, underscores, and hyphens"
+        ));
+    }
+    Ok(())
+}
+
 pub fn load_with_global(global_path: Option<&Path>, project_config_path: Option<&Path>) -> Result<Config> {
     let mut config = Config::default();
 
@@ -508,6 +522,7 @@ pub fn load_with_global(global_path: Option<&Path>, project_config_path: Option<
     apply_env_vars(&mut config);
 
     validate_env_passthrough(&config.container.env)?;
+    validate_container_user(&config.container.user)?;
 
     Ok(config)
 }
@@ -804,5 +819,55 @@ env = ["--rm"]
 "#);
         let err = load_with_global(None, Some(&project)).unwrap_err();
         assert!(err.to_string().contains("--rm"));
+    }
+
+    // ── validate_container_user ────────────────────────────────────────────────
+
+    #[test]
+    fn valid_container_users_accepted() {
+        assert!(validate_container_user("am").is_ok());
+        assert!(validate_container_user("_svc").is_ok());
+        assert!(validate_container_user("dev-user1").is_ok());
+    }
+
+    #[test]
+    fn container_user_with_path_traversal_rejected() {
+        let err = validate_container_user("../root").unwrap_err();
+        assert!(err.to_string().contains("../root"));
+    }
+
+    #[test]
+    fn load_with_global_errors_on_invalid_container_user_in_file() {
+        let tmp = TempDir::new().unwrap();
+        let project = write_toml(tmp.path(), "config.toml", r#"
+[container]
+user = "../root"
+"#);
+        let err = load_with_global(None, Some(&project)).unwrap_err();
+        assert!(err.to_string().contains("../root"));
+    }
+
+    #[test]
+    fn env_var_can_override_container_user() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        std::env::set_var("AM_CONTAINER_USER", "dev-user1");
+
+        let config = load_with_global(None, None).unwrap();
+
+        std::env::remove_var("AM_CONTAINER_USER");
+
+        assert_eq!(config.container.user, "dev-user1");
+    }
+
+    #[test]
+    fn load_with_global_errors_on_invalid_container_user_in_env() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        std::env::set_var("AM_CONTAINER_USER", "../root");
+
+        let err = load_with_global(None, None).unwrap_err();
+
+        std::env::remove_var("AM_CONTAINER_USER");
+
+        assert!(err.to_string().contains("../root"));
     }
 }
