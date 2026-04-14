@@ -141,18 +141,11 @@ pub fn remove_jj_workspace(slug: &str, repo_root: &Path) -> Result<()> {
 /// any error occurs — callers use this for a best-effort warning only.
 pub fn git_worktree_has_changes(worktree_path: &Path) -> bool {
     let Ok(bin) = git_bin() else { return false };
-    let bin_str = bin.to_string_lossy();
-    let path_str = worktree_path.to_string_lossy();
     // `git status --porcelain` prints nothing if clean, lines if dirty
-    let output = std::process::Command::new(bin_str.as_ref())
-        .args([
-            "-C",
-            &path_str,
-            "--no-pager",
-            "status",
-            "--porcelain",
-            "-uall",
-        ])
+    let output = std::process::Command::new(bin)
+        .arg("-C")
+        .arg(worktree_path)
+        .args(["--no-pager", "status", "--porcelain", "-uall"])
         .output();
     match output {
         Ok(o) if o.status.success() => !o.stdout.is_empty(),
