@@ -1,9 +1,69 @@
 use std::error::Error;
+use std::process::Output;
 
 use anyhow::Result;
 
+/// Shared output-checking logic: returns an error if the command failed,
+/// otherwise returns stdout bytes for the caller to interpret.
+fn check_output<E>(
+    display: &str,
+    output: Output,
+    error_fn: impl Fn(String) -> E,
+) -> Result<Vec<u8>>
+where
+    E: Error + Send + Sync + 'static,
+{
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let msg = if stderr.is_empty() {
+            format!("{display} exited with status {}", output.status)
+        } else {
+            stderr
+        };
+        return Err(error_fn(msg).into());
+    }
+    Ok(output.stdout)
+}
+
+/// Execute a pre-built `Command` and return success/failure.
+///
+/// Prefer this over `run_command` when arguments include `Path`s — callers
+/// can use `.arg(path)` directly without converting to `&str` first.
+pub fn run_built_command<E>(
+    mut cmd: std::process::Command,
+    error_fn: impl Fn(String) -> E,
+) -> Result<()>
+where
+    E: Error + Send + Sync + 'static,
+{
+    let display = format!("{cmd:?}");
+    let output = cmd
+        .output()
+        .map_err(|e| error_fn(format!("failed to run {display}: {e}")))?;
+    check_output(&display, output, error_fn)?;
+    Ok(())
+}
+
+/// Execute a pre-built `Command` and return stdout.
+///
+/// Prefer this over `run_command_output` when arguments include `Path`s.
+pub fn run_built_command_output<E>(
+    mut cmd: std::process::Command,
+    error_fn: impl Fn(String) -> E,
+) -> Result<String>
+where
+    E: Error + Send + Sync + 'static,
+{
+    let display = format!("{cmd:?}");
+    let output = cmd
+        .output()
+        .map_err(|e| error_fn(format!("failed to run {display}: {e}")))?;
+    let stdout = check_output(&display, output, error_fn)?;
+    Ok(String::from_utf8_lossy(&stdout).trim().to_string())
+}
+
 /// Execute a command and return success/failure.
-/// 
+///
 /// The `error_fn` closure is called to construct an error if the command
 /// fails, allowing each caller to produce their own error type.
 pub fn run_command<E>(
@@ -18,21 +78,12 @@ where
         .args(args)
         .output()
         .map_err(|e| error_fn(format!("failed to run {bin}: {e}")))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let msg = if stderr.is_empty() {
-            format!("{bin} exited with status {}", output.status)
-        } else {
-            stderr
-        };
-        return Err(error_fn(msg).into());
-    }
+    check_output(bin, output, error_fn)?;
     Ok(())
 }
 
 /// Execute a command and return stdout.
-/// 
+///
 /// The `error_fn` closure is called to construct an error if the command
 /// fails or produces output that can't be converted to UTF-8, allowing each
 /// caller to produce their own error type.
@@ -48,17 +99,8 @@ where
         .args(args)
         .output()
         .map_err(|e| error_fn(format!("failed to run {bin}: {e}")))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let msg = if stderr.is_empty() {
-            format!("{bin} exited with status {}", output.status)
-        } else {
-            stderr
-        };
-        return Err(error_fn(msg).into());
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    let stdout = check_output(bin, output, error_fn)?;
+    Ok(String::from_utf8_lossy(&stdout).trim().to_string())
 }
 
 #[cfg(test)]
@@ -110,5 +152,31 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("nonexistent-binary-xyz"));
+    }
+
+    #[test]
+    fn run_built_command_success() {
+        let cmd = std::process::Command::new("true");
+        assert!(run_built_command(cmd, TestError).is_ok());
+    }
+
+    #[test]
+    fn run_built_command_failure() {
+        let cmd = std::process::Command::new("false");
+        assert!(run_built_command(cmd, TestError).is_err());
+    }
+
+    #[test]
+    fn run_built_command_output_success() {
+        let mut cmd = std::process::Command::new("echo");
+        cmd.arg("hello");
+        let result = run_built_command_output(cmd, TestError);
+        assert_eq!(result.unwrap(), "hello");
+    }
+
+    #[test]
+    fn run_built_command_output_failure() {
+        let cmd = std::process::Command::new("false");
+        assert!(run_built_command_output(cmd, TestError).is_err());
     }
 }

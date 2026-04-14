@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use crate::command::{run_command, run_command_output};
+use crate::command::{run_built_command, run_built_command_output, run_command};
 use crate::error::AmError;
 
 
@@ -28,20 +28,16 @@ fn git_bin() -> Result<PathBuf> {
 
 /// Run a `git` subcommand with the given args in the given directory.
 fn run_git(bin: &Path, repo_root: &Path, args: &[&str]) -> Result<()> {
-    let bin_str = bin.to_string_lossy();
-    let root_str = repo_root.to_string_lossy();
-    let mut full_args = vec!["-C", root_str.as_ref(), "--no-pager"];
-    full_args.extend_from_slice(args);
-    run_command(&bin_str, &full_args, AmError::WorktreeError)
+    let mut cmd = std::process::Command::new(bin);
+    cmd.arg("-C").arg(repo_root).arg("--no-pager").args(args);
+    run_built_command(cmd, AmError::WorktreeError)
 }
 
 /// Run a `git` subcommand and return stdout.
 fn run_git_output(bin: &Path, repo_root: &Path, args: &[&str]) -> Result<String> {
-    let bin_str = bin.to_string_lossy();
-    let root_str = repo_root.to_string_lossy();
-    let mut full_args = vec!["-C", root_str.as_ref(), "--no-pager"];
-    full_args.extend_from_slice(args);
-    run_command_output(&bin_str, &full_args, AmError::WorktreeError)
+    let mut cmd = std::process::Command::new(bin);
+    cmd.arg("-C").arg(repo_root).arg("--no-pager").args(args);
+    run_built_command_output(cmd, AmError::WorktreeError)
 }
 
 /// Returns true if the branch `am/<slug>` exists in the repo at `repo_root`.
