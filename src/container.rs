@@ -296,7 +296,16 @@ pub fn agent_extra_env(agent: KnownAgent) -> Result<Vec<(String, String)>> {
             let token = get_gh_token()?;
             Ok(vec![("GH_TOKEN".to_string(), token)])
         }
-        KnownAgent::Claude | KnownAgent::Gemini | KnownAgent::Codex => Ok(vec![]),
+        KnownAgent::Codex => {
+            let key = std::env::var("OPENAI_API_KEY").map_err(|_| {
+                anyhow::anyhow!(
+                    "agent 'codex' requires OPENAI_API_KEY to be set in the environment\n\
+                     Export it before running: export OPENAI_API_KEY=sk-..."
+                )
+            })?;
+            Ok(vec![("OPENAI_API_KEY".to_string(), key)])
+        }
+        KnownAgent::Claude | KnownAgent::Gemini => Ok(vec![]),
     }
 }
 
@@ -304,6 +313,19 @@ pub fn agent_extra_env(agent: KnownAgent) -> Result<Vec<(String, String)>> {
 /// Only meaningful when a container will be launched (credentials are mounted at runtime).
 /// Call in `am start` only when container mode is active.
 pub fn validate_agent_credentials(agent: KnownAgent) -> Result<()> {
+    // Codex is env-var-only — check the key is present now so the user gets a
+    // clear error at startup rather than a cryptic failure inside the container.
+    if agent == KnownAgent::Codex {
+        return if std::env::var("OPENAI_API_KEY").is_ok() {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(
+                "agent 'codex' requires OPENAI_API_KEY to be set in the environment\n\
+                 Export it before running: export OPENAI_API_KEY=sk-..."
+            ))
+        };
+    }
+
     let home = home_dir()?;
     let config_dir = std::env::var("CLAUDE_CONFIG_DIR")
         .map(PathBuf::from)
@@ -313,7 +335,7 @@ pub fn validate_agent_credentials(agent: KnownAgent) -> Result<()> {
         KnownAgent::Claude => vec![config_dir],
         KnownAgent::Copilot => vec![home.join(".config").join("gh")],
         KnownAgent::Gemini => vec![home.join(".gemini")],
-        KnownAgent::Codex => return Ok(()), // env-var only, no filesystem check
+        KnownAgent::Codex => unreachable!("handled above"),
     };
 
     for path in &required {
@@ -1159,14 +1181,44 @@ mod tests {
     }
 
     #[test]
-    fn validate_agent_credentials_codex_always_ok() {
+    fn validate_agent_credentials_codex_ok_when_key_set() {
         let _g = lock_env();
-        let tmp = TempDir::new().unwrap();
-        std::env::set_var("HOME", tmp.path());
+        std::env::set_var("OPENAI_API_KEY", "sk-test");
 
         assert!(validate_agent_credentials(KnownAgent::Codex).is_ok());
 
-        std::env::remove_var("HOME");
+        std::env::remove_var("OPENAI_API_KEY");
+    }
+
+    #[test]
+    fn validate_agent_credentials_codex_fails_when_key_missing() {
+        let _g = lock_env();
+        std::env::remove_var("OPENAI_API_KEY");
+
+        let err = validate_agent_credentials(KnownAgent::Codex).unwrap_err();
+        assert!(err.to_string().contains("OPENAI_API_KEY"));
+    }
+
+    #[test]
+    fn agent_extra_env_codex_injects_openai_api_key() {
+        let _g = lock_env();
+        std::env::set_var("OPENAI_API_KEY", "sk-test-key");
+
+        let env = agent_extra_env(KnownAgent::Codex).unwrap();
+        assert_eq!(env.len(), 1);
+        assert_eq!(env[0].0, "OPENAI_API_KEY");
+        assert_eq!(env[0].1, "sk-test-key");
+
+        std::env::remove_var("OPENAI_API_KEY");
+    }
+
+    #[test]
+    fn agent_extra_env_codex_errors_when_key_missing() {
+        let _g = lock_env();
+        std::env::remove_var("OPENAI_API_KEY");
+
+        let err = agent_extra_env(KnownAgent::Codex).unwrap_err();
+        assert!(err.to_string().contains("OPENAI_API_KEY"));
     }
 
     // ── Feature 6: Copilot auth mount ─────────────────────────────────────────

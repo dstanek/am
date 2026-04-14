@@ -11,13 +11,13 @@ Outstanding work for `am`. Items are grouped by theme and roughly ordered by pri
 
 Env-var-only auth preset for OpenAI Codex — no filesystem mount needed.
 
-**Partially implemented.** `KnownAgent::Codex` is accepted, credential validation is a no-op (correct — no filesystem check needed), and `resolve_agent_auth_mount` returns an empty vec (correct). What remains:
+**Fully implemented.** `KnownAgent::Codex` is accepted, `validate_agent_credentials` checks `OPENAI_API_KEY` is set (fails early with a clear message if not), `resolve_agent_auth_mount` returns an empty vec (no filesystem mount needed), and `agent_extra_env` injects `OPENAI_API_KEY` into the container.
 
 - [x] Design: no mount; auth via `OPENAI_API_KEY` env var pass-through; `validate_agent("codex")` must pass
 - [x] Implementation: `codex` branch in `resolve_agent_auth_mount()` returns empty vec
-- [ ] Implementation: `agent_extra_env` for `codex` should inject `OPENAI_API_KEY` from the host environment
-- [ ] Tests: `build_run_command` includes `-e OPENAI_API_KEY` when codex preset active
-- [ ] UX Review: `am start feat --agent codex` passes `OPENAI_API_KEY` into the container; no spurious mount errors
+- [x] Implementation: `agent_extra_env` for `codex` injects `OPENAI_API_KEY` from the host environment
+- [x] Tests: `agent_extra_env` injects key; errors when key missing; `validate_agent_credentials` fails early if key not set
+- [x] UX Review: `am start feat --agent codex` passes `OPENAI_API_KEY` into the container; clear error if key is not set
 
 ---
 
