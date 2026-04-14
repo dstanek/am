@@ -5,7 +5,6 @@ use anyhow::Result;
 use crate::command::{run_built_command, run_built_command_output, run_command};
 use crate::error::AmError;
 
-
 /// Resolve the `git` binary path, respecting the `AM_GIT_BIN` env override.
 fn git_bin() -> Result<PathBuf> {
     if let Ok(path) = std::env::var("AM_GIT_BIN") {
@@ -72,14 +71,15 @@ pub fn create_git_worktree(slug: &str, repo_root: &Path) -> Result<PathBuf> {
     }
 
     let branch_name = format!("am/{slug}");
-    let worktree_path_str = worktree_path.to_string_lossy();
-
     // `git worktree add -b <branch> <path>` creates branch off HEAD and checks it out
-    run_git(
-        &bin,
-        repo_root,
-        &["worktree", "add", "-b", &branch_name, &worktree_path_str],
-    )?;
+    let mut cmd = std::process::Command::new(&bin);
+    cmd.arg("-C")
+        .arg(repo_root)
+        .arg("--no-pager")
+        .args(["worktree", "add", "-b"])
+        .arg(&branch_name)
+        .arg(&worktree_path);
+    run_built_command(cmd, AmError::WorktreeError)?;
 
     Ok(worktree_path)
 }
@@ -145,7 +145,14 @@ pub fn git_worktree_has_changes(worktree_path: &Path) -> bool {
     let path_str = worktree_path.to_string_lossy();
     // `git status --porcelain` prints nothing if clean, lines if dirty
     let output = std::process::Command::new(bin_str.as_ref())
-        .args(["-C", &path_str, "--no-pager", "status", "--porcelain", "-uall"])
+        .args([
+            "-C",
+            &path_str,
+            "--no-pager",
+            "status",
+            "--porcelain",
+            "-uall",
+        ])
         .output();
     match output {
         Ok(o) if o.status.success() => !o.stdout.is_empty(),
@@ -180,6 +187,8 @@ pub fn remove_git_worktree(slug: &str, repo_root: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
     use std::sync::Mutex;
     use tempfile::TempDir;
 
@@ -188,23 +197,30 @@ mod tests {
     /// Init a repo and make an initial commit so HEAD exists.
     fn init_repo_with_commit(dir: &Path) {
         std::process::Command::new("git")
-            .args(["-C", &dir.to_string_lossy(), "init"])
+            .arg("-C")
+            .arg(dir)
+            .arg("init")
             .output()
             .unwrap();
         std::process::Command::new("git")
-            .args(["-C", &dir.to_string_lossy(), "config", "user.email", "test@example.com"])
+            .arg("-C")
+            .arg(dir)
+            .args(["config", "user.email", "test@example.com"])
             .output()
             .unwrap();
         std::process::Command::new("git")
-            .args(["-C", &dir.to_string_lossy(), "config", "user.name", "Test"])
+            .arg("-C")
+            .arg(dir)
+            .args(["config", "user.name", "Test"])
             .output()
             .unwrap();
         std::process::Command::new("git")
-            .args(["-C", &dir.to_string_lossy(), "commit", "--allow-empty", "-m", "initial commit"])
+            .arg("-C")
+            .arg(dir)
+            .args(["commit", "--allow-empty", "-m", "initial commit"])
             .output()
             .unwrap();
     }
-
 
     // ── jj helpers ────────────────────────────────────────────────────────────
 
@@ -283,7 +299,10 @@ mod tests {
         assert!(out.contains("workspace"), "expected 'workspace': {out}");
         assert!(out.contains("forget"), "expected 'forget': {out}");
         assert!(out.contains("feat"), "expected slug 'feat': {out}");
-        assert!(!worktree_path.exists(), "worktree directory should be removed");
+        assert!(
+            !worktree_path.exists(),
+            "worktree directory should be removed"
+        );
 
         std::env::remove_var("AM_JJ_BIN");
         std::env::remove_var("AM_JJ_LOG");
@@ -314,7 +333,9 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         // Init repo but make NO initial commit — HEAD is unborn
         std::process::Command::new("git")
-            .args(["-C", &tmp.path().to_string_lossy(), "init"])
+            .arg("-C")
+            .arg(tmp.path())
+            .arg("init")
             .output()
             .unwrap();
 
@@ -344,6 +365,25 @@ mod tests {
     }
 
     #[test]
+    fn create_git_worktree_supports_non_utf8_repo_paths() {
+        let tmp = TempDir::new().unwrap();
+        let repo_root = tmp.path().join(OsString::from_vec(b"repo-\xFF".to_vec()));
+        std::fs::create_dir_all(&repo_root).unwrap();
+        init_repo_with_commit(&repo_root);
+
+        let worktree_path = create_git_worktree("feat", &repo_root).unwrap();
+
+        assert!(worktree_path.exists(), "worktree directory should exist");
+        assert_eq!(
+            worktree_path,
+            repo_root.join(".am").join("worktrees").join("feat")
+        );
+
+        let bin = git_bin().unwrap();
+        assert!(branch_exists(&bin, "feat", &repo_root));
+    }
+
+    #[test]
     fn create_git_worktree_duplicate_slug_errors() {
         let tmp = TempDir::new().unwrap();
         init_repo_with_commit(tmp.path());
@@ -365,7 +405,10 @@ mod tests {
 
         assert!(!worktree_path.exists(), "worktree directory should be gone");
         let bin = git_bin().unwrap();
-        assert!(!branch_exists(&bin, "feat", tmp.path()), "branch should be deleted");
+        assert!(
+            !branch_exists(&bin, "feat", tmp.path()),
+            "branch should be deleted"
+        );
     }
 
     // ── git_worktree_has_changes ───────────────────────────────────────────────
