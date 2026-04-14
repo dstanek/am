@@ -112,26 +112,26 @@ fn jj_bin() -> Result<PathBuf> {
 }
 
 /// Run a `jj` subcommand with the given args, returning an error on non-zero exit.
-fn run_jj(args: &[&str]) -> Result<()> {
-    let bin = jj_bin()?;
-    let bin_str = bin.to_string_lossy();
-    run_command(&bin_str, args, AmError::WorktreeError)
+fn run_jj(bin: &Path, args: &[&str]) -> Result<()> {
+    run_command(&bin.to_string_lossy(), args, AmError::WorktreeError)
 }
 
 /// Create a jj workspace for `slug` at `<repo-root>/.am/worktrees/<slug>`.
 pub fn create_jj_workspace(slug: &str, repo_root: &Path) -> Result<PathBuf> {
+    let bin = jj_bin()?;
     let worktree_path = repo_root.join(".am").join("worktrees").join(slug);
     if let Some(parent) = worktree_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     let path_str = worktree_path.to_string_lossy();
-    run_jj(&["workspace", "add", &path_str, "--name", slug])?;
+    run_jj(&bin, &["workspace", "add", &path_str, "--name", slug])?;
     Ok(worktree_path)
 }
 
 /// Remove the jj workspace for `slug` and delete the workspace directory.
 pub fn remove_jj_workspace(slug: &str, repo_root: &Path) -> Result<()> {
-    run_jj(&["workspace", "forget", slug])?;
+    let bin = jj_bin()?;
+    run_jj(&bin, &["workspace", "forget", slug])?;
     let worktree_path = repo_root.join(".am").join("worktrees").join(slug);
     if worktree_path.exists() {
         std::fs::remove_dir_all(&worktree_path)

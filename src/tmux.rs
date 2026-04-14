@@ -33,13 +33,11 @@ fn tmux_bin() -> Result<PathBuf> {
         .map_err(|_| AmError::TmuxError("tmux not found on PATH".to_string()).into())
 }
 
-fn run_tmux(args: &[&str]) -> Result<()> {
-    let bin = tmux_bin()?;
+fn run_tmux(bin: &Path, args: &[&str]) -> Result<()> {
     command::run_command(&bin.to_string_lossy(), args, AmError::TmuxError)
 }
 
-fn run_tmux_output(args: &[&str]) -> Result<String> {
-    let bin = tmux_bin()?;
+fn run_tmux_output(bin: &Path, args: &[&str]) -> Result<String> {
     command::run_command_output(&bin.to_string_lossy(), args, AmError::TmuxError)
 }
 
@@ -51,7 +49,8 @@ pub fn is_in_tmux() -> bool {
 
 /// `tmux new-window -n <window_name> -c <working_dir>`
 pub fn create_window(window_name: &str, working_dir: &Path) -> Result<()> {
-    run_tmux(&[
+    let bin = tmux_bin()?;
+    run_tmux(&bin, &[
         "new-window",
         "-n",
         window_name,
@@ -70,12 +69,13 @@ pub fn create_window(window_name: &str, working_dir: &Path) -> Result<()> {
 /// correct percentage (e.g. if the agent is in the new pane, pass `split_percent` directly;
 /// if the agent is in the original pane, pass `100 - split_percent`).
 pub fn split_window(window_name: &str, working_dir: &Path, direction: &SplitDirection, new_pane_percent: u8) -> Result<()> {
+    let bin = tmux_bin()?;
     let flag = match direction {
         SplitDirection::Horizontal => "-h",
         SplitDirection::Vertical => "-v",
     };
     let percent = new_pane_percent.to_string();
-    run_tmux(&[
+    run_tmux(&bin, &[
         "split-window",
         flag,
         "-p", &percent,
@@ -86,39 +86,46 @@ pub fn split_window(window_name: &str, working_dir: &Path, direction: &SplitDire
 
 /// `tmux select-pane -t <target>`
 pub fn select_pane(target: &str) -> Result<()> {
-    run_tmux(&["select-pane", "-t", target])
+    let bin = tmux_bin()?;
+    run_tmux(&bin, &["select-pane", "-t", target])
 }
 
 /// `tmux select-window -t <window_name>`
 pub fn select_window(window_name: &str) -> Result<()> {
-    run_tmux(&["select-window", "-t", window_name])
+    let bin = tmux_bin()?;
+    run_tmux(&bin, &["select-window", "-t", window_name])
 }
 
 /// `tmux send-keys -t <pane_target> "<keys>" Enter`
 pub fn send_keys(pane_target: &str, keys: &str) -> Result<()> {
-    run_tmux(&["send-keys", "-t", pane_target, keys, "Enter"])
+    let bin = tmux_bin()?;
+    run_tmux(&bin, &["send-keys", "-t", pane_target, keys, "Enter"])
 }
 
 /// `tmux kill-window -t <window_name>`
 pub fn kill_window(window_name: &str) -> Result<()> {
-    run_tmux(&["kill-window", "-t", window_name])
+    let bin = tmux_bin()?;
+    run_tmux(&bin, &["kill-window", "-t", window_name])
 }
 
 /// `tmux kill-pane -t <target>`
 pub fn kill_pane(target: &str) -> Result<()> {
-    run_tmux(&["kill-pane", "-t", target])
+    let bin = tmux_bin()?;
+    run_tmux(&bin, &["kill-pane", "-t", target])
 }
 
 /// Returns the name of the current tmux window.
 /// `tmux display-message -p '#W'`
 pub fn current_window_name() -> Result<String> {
-    run_tmux_output(&["display-message", "-p", "#W"])
+    let bin = tmux_bin()?;
+    run_tmux_output(&bin, &["display-message", "-p", "#W"])
 }
 
 /// Returns the working directory of the current tmux pane.
 /// `tmux display-message -p '#{pane_current_path}'`
 pub fn current_pane_path() -> Result<std::path::PathBuf> {
-    let s = run_tmux_output(&["display-message", "-p", "#{pane_current_path}"])?;
+    let bin = tmux_bin()?;
+    let s = run_tmux_output(&bin, &["display-message", "-p", "#{pane_current_path}"])?;
     Ok(std::path::PathBuf::from(s))
 }
 
@@ -126,9 +133,10 @@ pub fn current_pane_path() -> Result<std::path::PathBuf> {
 /// If `target` is `None`, renames the current window.
 /// `tmux rename-window [-t <target>] <new_name>`
 pub fn rename_window(target: Option<&str>, new_name: &str) -> Result<()> {
+    let bin = tmux_bin()?;
     match target {
-        Some(t) => run_tmux(&["rename-window", "-t", t, new_name]),
-        None => run_tmux(&["rename-window", new_name]),
+        Some(t) => run_tmux(&bin, &["rename-window", "-t", t, new_name]),
+        None => run_tmux(&bin, &["rename-window", new_name]),
     }
 }
 
