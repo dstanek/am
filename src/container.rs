@@ -81,22 +81,28 @@ pub enum MountMode {
     ReadWrite,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AgentAuthMount {
     pub host_path: PathBuf,
     pub container_path: PathBuf,
     pub mode: MountMode,
 }
 
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AgentAuth {
+    pub mounts: Vec<AgentAuthMount>,
+    pub env: Vec<(String, String)>,
+}
+
 #[derive(Debug, Clone)]
 pub struct ContainerMounts {
     pub worktree_host: PathBuf,
-    pub vcs_host: PathBuf,                    // .git dir (git) or .jj dir (jj)
-    pub colocated_git_host: Option<PathBuf>,  // .git for colocated jj+git repos
-    pub gitconfig_host: PathBuf,              // .am/gitconfig (or override)
-    pub ssh_host: PathBuf,                    // ~/.ssh
+    pub vcs_host: PathBuf,                   // .git dir (git) or .jj dir (jj)
+    pub colocated_git_host: Option<PathBuf>, // .git for colocated jj+git repos
+    pub gitconfig_host: PathBuf,             // .am/gitconfig (or override)
+    pub ssh_host: PathBuf,                   // ~/.ssh
     pub agent_auth: Vec<AgentAuthMount>,
-    pub container_user: String,               // username inside the container
+    pub container_user: String, // username inside the container
 }
 
 // ── Runtime detection ─────────────────────────────────────────────────────────
@@ -164,16 +170,16 @@ fn mount_str(host: &Path, container: &str, mode: MountMode, selinux: bool) -> St
 // ── Mount resolution ──────────────────────────────────────────────────────────
 
 fn home_dir() -> Result<PathBuf> {
-    std::env::var("HOME")
-        .map(PathBuf::from)
-        .with_context(|| "HOME environment variable not set — cannot resolve user home directory for mounts")
+    std::env::var("HOME").map(PathBuf::from).with_context(|| {
+        "HOME environment variable not set — cannot resolve user home directory for mounts"
+    })
 }
 
 pub fn resolve_mounts(
     slug: &str,
     repo_root: &Path,
     vcs: &Vcs,
-    agent: Option<KnownAgent>,
+    agent_auth: Vec<AgentAuthMount>,
     gitconfig: Option<&Path>,
     ssh: Option<&Path>,
     container_user: &str,
@@ -202,9 +208,6 @@ pub fn resolve_mounts(
     let ssh_host = ssh
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| home.join(".ssh"));
-    let agent_auth = agent
-        .map(|a| resolve_agent_auth_mount(a, container_user))
-        .unwrap_or_default();
 
     Ok(ContainerMounts {
         worktree_host,
@@ -217,14 +220,14 @@ pub fn resolve_mounts(
     })
 }
 
-pub fn resolve_agent_auth_mount(agent: KnownAgent, container_user: &str) -> Vec<AgentAuthMount> {
-    let home = match home_dir() {
-        Ok(h) => h,
-        Err(_) => return vec![],
-    };
-    let home_in_container = format!("/home/{container_user}");
-    match agent {
+fn resolve_agent_auth_mounts(
+    agent: KnownAgent,
+    container_user: &str,
+) -> Result<Vec<AgentAuthMount>> {
+    Ok(match agent {
         KnownAgent::Claude => {
+            let home = home_dir()?;
+            let home_in_container = format!("/home/{container_user}");
             // Config dir: use CLAUDE_CONFIG_DIR if set, otherwise ~/.claude
             let config_host = std::env::var("CLAUDE_CONFIG_DIR")
                 .map(PathBuf::from)
@@ -242,26 +245,36 @@ pub fn resolve_agent_auth_mount(agent: KnownAgent, container_user: &str) -> Vec<
                 },
             ]
         }
-        KnownAgent::Copilot => vec![
-            AgentAuthMount {
-                // GitHub CLI auth token (required for Copilot authentication)
-                host_path: home.join(".config").join("gh"),
-                container_path: PathBuf::from(format!("{home_in_container}/.config/gh")),
+        KnownAgent::Copilot => {
+            let home = home_dir()?;
+            let home_in_container = format!("/home/{container_user}");
+            vec![
+                AgentAuthMount {
+                    // GitHub CLI auth token (required for Copilot authentication)
+                    host_path: home.join(".config").join("gh"),
+                    container_path: PathBuf::from(format!("{home_in_container}/.config/gh")),
+                    mode: MountMode::ReadOnly,
+                },
+                AgentAuthMount {
+                    host_path: home.join(".config").join("github-copilot"),
+                    container_path: PathBuf::from(format!(
+                        "{home_in_container}/.config/github-copilot"
+                    )),
+                    mode: MountMode::ReadOnly,
+                },
+            ]
+        }
+        KnownAgent::Gemini => {
+            let home = home_dir()?;
+            let home_in_container = format!("/home/{container_user}");
+            vec![AgentAuthMount {
+                host_path: home.join(".gemini"),
+                container_path: PathBuf::from(format!("{home_in_container}/.gemini")),
                 mode: MountMode::ReadOnly,
-            },
-            AgentAuthMount {
-                host_path: home.join(".config").join("github-copilot"),
-                container_path: PathBuf::from(format!("{home_in_container}/.config/github-copilot")),
-                mode: MountMode::ReadOnly,
-            },
-        ],
-        KnownAgent::Gemini => vec![AgentAuthMount {
-            host_path: home.join(".gemini"),
-            container_path: PathBuf::from(format!("{home_in_container}/.gemini")),
-            mode: MountMode::ReadOnly,
-        }],
+            }]
+        }
         KnownAgent::Codex => vec![], // env-var only, no filesystem mount
-    }
+    })
 }
 
 /// Returns the extra CLI flags needed to run an agent in autonomous mode.
@@ -274,7 +287,10 @@ pub fn agent_auto_flags(agent: KnownAgent) -> Vec<String> {
 
 /// Runs `gh auth token` and returns the token string.
 fn get_gh_token() -> Result<String> {
-    let output = std::process::Command::new("gh")
+    let gh = find_bin("gh", "AM_GH_BIN").ok_or_else(|| {
+        anyhow::anyhow!("failed to execute 'gh auth token' — is GitHub CLI installed?")
+    })?;
+    let output = std::process::Command::new(gh)
         .args(["auth", "token"])
         .output()
         .with_context(|| "failed to execute 'gh auth token' — is GitHub CLI installed?")?;
@@ -289,69 +305,92 @@ fn get_gh_token() -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-/// Returns extra environment variables to inject into the container for the given agent.
-pub fn agent_extra_env(agent: KnownAgent) -> Result<Vec<(String, String)>> {
-    match agent {
-        KnownAgent::Copilot => {
-            let token = get_gh_token()?;
-            Ok(vec![("GH_TOKEN".to_string(), token)])
-        }
-        KnownAgent::Codex => {
-            let key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-                anyhow::anyhow!(
-                    "agent 'codex' requires OPENAI_API_KEY to be set in the environment\n\
-                     Export it before running: export OPENAI_API_KEY=sk-..."
-                )
-            })?;
-            Ok(vec![("OPENAI_API_KEY".to_string(), key)])
-        }
-        KnownAgent::Claude | KnownAgent::Gemini => Ok(vec![]),
-    }
+fn required_env_var(agent: KnownAgent, key: &str, example: &str) -> Result<String> {
+    std::env::var(key)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "agent '{agent}' requires {key} to be set in the environment\n\
+                 Export it before running: export {key}={example}"
+            )
+        })
 }
 
-/// Validate that a known agent's required credential directories exist on the host.
-/// Only meaningful when a container will be launched (credentials are mounted at runtime).
-/// Call in `am start` only when container mode is active.
-pub fn validate_agent_credentials(agent: KnownAgent) -> Result<()> {
-    // Codex is env-var-only — check the key is present now so the user gets a
-    // clear error at startup rather than a cryptic failure inside the container.
-    if agent == KnownAgent::Codex {
-        return if std::env::var("OPENAI_API_KEY").is_ok() {
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!(
-                "agent 'codex' requires OPENAI_API_KEY to be set in the environment\n\
-                 Export it before running: export OPENAI_API_KEY=sk-..."
-            ))
-        };
-    }
-
-    let home = home_dir()?;
-    let config_dir = std::env::var("CLAUDE_CONFIG_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| home.join(".claude"));
-
-    let required: Vec<PathBuf> = match agent {
-        KnownAgent::Claude => vec![config_dir],
-        KnownAgent::Copilot => vec![home.join(".config").join("gh")],
-        KnownAgent::Gemini => vec![home.join(".gemini")],
-        KnownAgent::Codex => unreachable!("handled above"),
-    };
-
-    for path in &required {
+fn ensure_required_paths(agent: KnownAgent, required: &[PathBuf]) -> Result<()> {
+    for path in required {
         if !path.exists() {
             return Err(anyhow::anyhow!(
-                "agent '{agent}' requires directory to exist: {path}\n\
+                "agent '{agent}' requires path to exist: {path}\n\
                  Make sure {agent} is installed and authenticated on this system",
                 path = path.display()
             ))
-            .with_context(|| format!(
-                "checking agent credentials for '{agent}' at {}",
-                path.display()
-            ));
+            .with_context(|| {
+                format!(
+                    "checking agent credentials for '{agent}' at {}",
+                    path.display()
+                )
+            });
         }
     }
     Ok(())
+}
+
+fn resolve_agent_auth(agent: KnownAgent, container_user: &str) -> Result<AgentAuth> {
+    match agent {
+        KnownAgent::Claude => {
+            let mounts = resolve_agent_auth_mounts(agent, container_user)?;
+            let required = mounts
+                .first()
+                .map(|mount| vec![mount.host_path.clone()])
+                .unwrap_or_default();
+            ensure_required_paths(agent, &required)?;
+            Ok(AgentAuth {
+                mounts,
+                env: vec![],
+            })
+        }
+        KnownAgent::Copilot => {
+            let mounts = resolve_agent_auth_mounts(agent, container_user)?;
+            let required = mounts
+                .iter()
+                .find(|mount| mount.host_path.ends_with(Path::new(".config/gh")))
+                .map(|mount| vec![mount.host_path.clone()])
+                .unwrap_or_default();
+            ensure_required_paths(agent, &required)?;
+            let token = get_gh_token()?;
+            Ok(AgentAuth {
+                mounts,
+                env: vec![("GH_TOKEN".to_string(), token)],
+            })
+        }
+        KnownAgent::Gemini => {
+            let mounts = resolve_agent_auth_mounts(agent, container_user)?;
+            let required = mounts
+                .first()
+                .map(|mount| vec![mount.host_path.clone()])
+                .unwrap_or_default();
+            ensure_required_paths(agent, &required)?;
+            Ok(AgentAuth {
+                mounts,
+                env: vec![],
+            })
+        }
+        KnownAgent::Codex => Ok(AgentAuth {
+            mounts: vec![],
+            env: vec![(
+                "OPENAI_API_KEY".to_string(),
+                required_env_var(agent, "OPENAI_API_KEY", "sk-...")?,
+            )],
+        }),
+    }
+}
+
+/// Resolve and validate a known agent's authentication requirements before the
+/// container is launched. This performs all preflight checks and returns the
+/// mounts and environment variables needed for the actual runtime command.
+pub fn preflight_agent_auth(agent: KnownAgent, container_user: &str) -> Result<AgentAuth> {
+    resolve_agent_auth(agent, container_user)
 }
 
 // ── Command building ──────────────────────────────────────────────────────────
@@ -425,7 +464,12 @@ pub fn build_run_command(
     // Colocated jj+git: mount the git object store alongside .jj
     if let Some(ref git) = mounts.colocated_git_host {
         cmd.push("-v".to_string());
-        cmd.push(mount_str(git, &git.to_string_lossy(), MountMode::ReadWrite, selinux));
+        cmd.push(mount_str(
+            git,
+            &git.to_string_lossy(),
+            MountMode::ReadWrite,
+            selinux,
+        ));
     }
 
     // ~/.gitconfig — only mount if the file exists
@@ -584,6 +628,15 @@ mod tests {
         bin
     }
 
+    fn fake_gh(dir: &Path, body: &str) -> PathBuf {
+        let bin = dir.join("gh");
+        std::fs::write(&bin, format!("#!/bin/sh\n{body}\n")).unwrap();
+        let mut perms = std::fs::metadata(&bin).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&bin, perms).unwrap();
+        bin
+    }
+
     fn make_mounts(tmp: &Path) -> ContainerMounts {
         ContainerMounts {
             worktree_host: tmp.join("worktrees/feat"),
@@ -686,7 +739,8 @@ mod tests {
         std::env::set_var("HOME", tmp.path());
 
         let repo_root = tmp.path().join("repo");
-        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Git, None::<KnownAgent>, None, None, "am").unwrap();
+        let mounts =
+            resolve_mounts("feat", &repo_root, &Vcs::Git, vec![], None, None, "am").unwrap();
 
         assert_eq!(mounts.worktree_host, repo_root.join(".am/worktrees/feat"));
         assert_eq!(mounts.vcs_host, repo_root.join(".git"));
@@ -705,7 +759,8 @@ mod tests {
 
         let repo_root = tmp.path().join("repo");
         std::fs::create_dir_all(repo_root.join(".git")).unwrap();
-        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Jj, None::<KnownAgent>, None, None, "am").unwrap();
+        let mounts =
+            resolve_mounts("feat", &repo_root, &Vcs::Jj, vec![], None, None, "am").unwrap();
 
         assert_eq!(mounts.colocated_git_host, Some(repo_root.join(".git")));
 
@@ -719,7 +774,8 @@ mod tests {
         std::env::set_var("HOME", tmp.path());
 
         let repo_root = tmp.path().join("repo");
-        let mounts = resolve_mounts("feat", &repo_root, &Vcs::Jj, None::<KnownAgent>, None, None, "am").unwrap();
+        let mounts =
+            resolve_mounts("feat", &repo_root, &Vcs::Jj, vec![], None, None, "am").unwrap();
 
         assert_eq!(mounts.colocated_git_host, None);
 
@@ -751,13 +807,24 @@ mod tests {
     }
 
     #[test]
-    fn resolve_mounts_includes_agent_auth_for_claude() {
+    fn resolve_mounts_includes_preflighted_agent_auth_for_claude() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
         std::env::remove_var("CLAUDE_CONFIG_DIR");
+        std::fs::create_dir(tmp.path().join(".claude")).unwrap();
 
-        let mounts = resolve_mounts("feat", tmp.path(), &Vcs::Git, Some(KnownAgent::Claude), None, None, "am").unwrap();
+        let agent_auth = preflight_agent_auth(KnownAgent::Claude, "am").unwrap();
+        let mounts = resolve_mounts(
+            "feat",
+            tmp.path(),
+            &Vcs::Git,
+            agent_auth.mounts,
+            None,
+            None,
+            "am",
+        )
+        .unwrap();
         assert_eq!(mounts.agent_auth.len(), 2);
         assert_eq!(mounts.agent_auth[0].host_path, tmp.path().join(".claude"));
         assert_eq!(
@@ -1002,16 +1069,16 @@ mod tests {
         std::env::remove_var("MOCK_CONTAINER_LOG");
     }
 
-    // ── Feature 4: Claude auth mount ──────────────────────────────────────────
+    // ── Feature 4: Claude auth resolution ─────────────────────────────────────
 
     #[test]
-    fn resolve_agent_auth_mount_claude_defaults_to_dot_claude() {
+    fn resolve_agent_auth_claude_defaults_to_dot_claude() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
         std::env::remove_var("CLAUDE_CONFIG_DIR");
 
-        let mounts = resolve_agent_auth_mount(KnownAgent::Claude, "am");
+        let mounts = resolve_agent_auth_mounts(KnownAgent::Claude, "am").unwrap();
         assert_eq!(mounts.len(), 2);
         assert_eq!(mounts[0].host_path, tmp.path().join(".claude"));
         assert_eq!(mounts[0].container_path, PathBuf::from("/home/am/.claude"));
@@ -1027,14 +1094,14 @@ mod tests {
     }
 
     #[test]
-    fn resolve_agent_auth_mount_claude_uses_claude_config_dir_when_set() {
+    fn resolve_agent_auth_claude_uses_claude_config_dir_when_set() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         let custom_config = tmp.path().join("custom-claude-config");
         std::env::set_var("HOME", tmp.path());
         std::env::set_var("CLAUDE_CONFIG_DIR", &custom_config);
 
-        let mounts = resolve_agent_auth_mount(KnownAgent::Claude, "am");
+        let mounts = resolve_agent_auth_mounts(KnownAgent::Claude, "am").unwrap();
         assert_eq!(mounts.len(), 2);
         assert_eq!(mounts[0].host_path, custom_config);
         assert_eq!(mounts[0].container_path, PathBuf::from("/home/am/.claude"));
@@ -1101,138 +1168,163 @@ mod tests {
 
     #[test]
     fn known_agent_display_matches_parse_input() {
-        for agent in [KnownAgent::Claude, KnownAgent::Copilot, KnownAgent::Gemini, KnownAgent::Codex] {
+        for agent in [
+            KnownAgent::Claude,
+            KnownAgent::Copilot,
+            KnownAgent::Gemini,
+            KnownAgent::Codex,
+        ] {
             let s = agent.to_string();
             assert_eq!(KnownAgent::parse(&s).unwrap(), agent);
         }
     }
 
-    // ── validate_agent_credentials ─────────────────────────────────────
+    // ── preflight_agent_auth ───────────────────────────────────────────
 
     #[test]
-    fn validate_agent_credentials_claude_ok_when_dir_exists() {
+    fn preflight_agent_auth_claude_ok_when_dir_exists() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
         std::env::remove_var("CLAUDE_CONFIG_DIR");
         std::fs::create_dir(tmp.path().join(".claude")).unwrap();
 
-        assert!(validate_agent_credentials(KnownAgent::Claude).is_ok());
+        assert!(preflight_agent_auth(KnownAgent::Claude, "am").is_ok());
 
         std::env::remove_var("HOME");
     }
 
     #[test]
-    fn validate_agent_credentials_claude_fails_when_dir_missing() {
+    fn preflight_agent_auth_claude_fails_when_dir_missing() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
         std::env::remove_var("CLAUDE_CONFIG_DIR");
 
-        assert!(validate_agent_credentials(KnownAgent::Claude).is_err());
+        assert!(preflight_agent_auth(KnownAgent::Claude, "am").is_err());
 
         std::env::remove_var("HOME");
     }
 
     #[test]
-    fn validate_agent_credentials_copilot_ok_when_gh_dir_exists() {
+    fn preflight_agent_auth_copilot_returns_mounts_and_env() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
+        let gh = fake_gh(tmp.path(), "echo gh-test-token");
+        std::env::set_var("AM_GH_BIN", &gh);
         std::fs::create_dir_all(tmp.path().join(".config").join("gh")).unwrap();
+        std::fs::create_dir_all(tmp.path().join(".config").join("github-copilot")).unwrap();
 
-        assert!(validate_agent_credentials(KnownAgent::Copilot).is_ok());
+        let auth = preflight_agent_auth(KnownAgent::Copilot, "am").unwrap();
+        assert_eq!(
+            auth.env,
+            vec![("GH_TOKEN".to_string(), "gh-test-token".to_string())]
+        );
+        assert_eq!(auth.mounts.len(), 2);
 
+        std::env::remove_var("AM_GH_BIN");
         std::env::remove_var("HOME");
     }
 
     #[test]
-    fn validate_agent_credentials_copilot_fails_when_gh_dir_missing() {
+    fn preflight_agent_auth_copilot_fails_when_gh_dir_missing() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
-        assert!(validate_agent_credentials(KnownAgent::Copilot).is_err());
+        assert!(preflight_agent_auth(KnownAgent::Copilot, "am").is_err());
 
         std::env::remove_var("HOME");
     }
 
     #[test]
-    fn validate_agent_credentials_gemini_ok_when_dir_exists() {
+    fn preflight_agent_auth_gemini_ok_when_dir_exists() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
         std::fs::create_dir(tmp.path().join(".gemini")).unwrap();
 
-        assert!(validate_agent_credentials(KnownAgent::Gemini).is_ok());
+        assert!(preflight_agent_auth(KnownAgent::Gemini, "am").is_ok());
 
         std::env::remove_var("HOME");
     }
 
     #[test]
-    fn validate_agent_credentials_gemini_fails_when_dir_missing() {
+    fn preflight_agent_auth_gemini_fails_when_dir_missing() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
-        assert!(validate_agent_credentials(KnownAgent::Gemini).is_err());
+        assert!(preflight_agent_auth(KnownAgent::Gemini, "am").is_err());
 
         std::env::remove_var("HOME");
     }
 
     #[test]
-    fn validate_agent_credentials_codex_ok_when_key_set() {
+    fn preflight_agent_auth_codex_ok_when_key_set() {
         let _g = lock_env();
         std::env::set_var("OPENAI_API_KEY", "sk-test");
 
-        assert!(validate_agent_credentials(KnownAgent::Codex).is_ok());
+        let auth = preflight_agent_auth(KnownAgent::Codex, "am").unwrap();
+        assert_eq!(
+            auth.env,
+            vec![("OPENAI_API_KEY".to_string(), "sk-test".to_string())]
+        );
+        assert!(auth.mounts.is_empty());
 
         std::env::remove_var("OPENAI_API_KEY");
     }
 
     #[test]
-    fn validate_agent_credentials_codex_fails_when_key_missing() {
+    fn preflight_agent_auth_codex_fails_when_key_missing() {
         let _g = lock_env();
         std::env::remove_var("OPENAI_API_KEY");
 
-        let err = validate_agent_credentials(KnownAgent::Codex).unwrap_err();
+        let err = preflight_agent_auth(KnownAgent::Codex, "am").unwrap_err();
         assert!(err.to_string().contains("OPENAI_API_KEY"));
     }
 
     #[test]
-    fn agent_extra_env_codex_injects_openai_api_key() {
+    fn preflight_agent_auth_codex_fails_when_key_empty() {
         let _g = lock_env();
-        std::env::set_var("OPENAI_API_KEY", "sk-test-key");
+        std::env::set_var("OPENAI_API_KEY", "");
 
-        let env = agent_extra_env(KnownAgent::Codex).unwrap();
-        assert_eq!(env.len(), 1);
-        assert_eq!(env[0].0, "OPENAI_API_KEY");
-        assert_eq!(env[0].1, "sk-test-key");
-
-        std::env::remove_var("OPENAI_API_KEY");
-    }
-
-    #[test]
-    fn agent_extra_env_codex_errors_when_key_missing() {
-        let _g = lock_env();
-        std::env::remove_var("OPENAI_API_KEY");
-
-        let err = agent_extra_env(KnownAgent::Codex).unwrap_err();
+        let err = preflight_agent_auth(KnownAgent::Codex, "am").unwrap_err();
         assert!(err.to_string().contains("OPENAI_API_KEY"));
+
+        std::env::remove_var("OPENAI_API_KEY");
     }
 
-    // ── Feature 6: Copilot auth mount ─────────────────────────────────────────
+    #[test]
+    fn build_run_command_includes_codex_api_key_env() {
+        let tmp = TempDir::new().unwrap();
+        let mounts = make_mounts(tmp.path());
+        let cmd = build_run_command(
+            &podman_runtime(),
+            "ubuntu:25.10",
+            &mounts,
+            &[],
+            &[("OPENAI_API_KEY".to_string(), "sk-test-key".to_string())],
+            &NetworkMode::Full,
+            "am-feat",
+        );
+        let joined = cmd.join(" ");
+        assert!(joined.contains("-e OPENAI_API_KEY=sk-test-key"));
+    }
+
+    // ── Feature 6: agent auth resolution ──────────────────────────────────────
 
     #[test]
-    fn resolve_agent_auth_mount_copilot_returns_both_dirs() {
+    fn resolve_agent_auth_copilot_returns_both_dirs() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
-        let mounts = resolve_agent_auth_mount(KnownAgent::Copilot, "am");
-        assert_eq!(mounts.len(), 2);
+        let auth_mounts = resolve_agent_auth_mounts(KnownAgent::Copilot, "am").unwrap();
+        assert_eq!(auth_mounts.len(), 2);
 
-        let paths: Vec<_> = mounts.iter().map(|m| m.host_path.clone()).collect();
+        let paths: Vec<_> = auth_mounts.iter().map(|m| m.host_path.clone()).collect();
         assert!(
             paths.contains(&tmp.path().join(".config").join("gh")),
             "missing gh config"
@@ -1242,7 +1334,7 @@ mod tests {
             "missing github-copilot config"
         );
 
-        for m in &mounts {
+        for m in &auth_mounts {
             assert_eq!(
                 m.mode,
                 MountMode::ReadOnly,
@@ -1254,13 +1346,16 @@ mod tests {
     }
 
     #[test]
-    fn resolve_agent_auth_mount_copilot_container_paths_match() {
+    fn resolve_agent_auth_copilot_container_paths_match() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
-        let mounts = resolve_agent_auth_mount(KnownAgent::Copilot, "am");
-        let container_paths: Vec<_> = mounts.iter().map(|m| m.container_path.clone()).collect();
+        let auth_mounts = resolve_agent_auth_mounts(KnownAgent::Copilot, "am").unwrap();
+        let container_paths: Vec<_> = auth_mounts
+            .iter()
+            .map(|m| m.container_path.clone())
+            .collect();
         assert!(container_paths.contains(&PathBuf::from("/home/am/.config/gh")));
         assert!(container_paths.contains(&PathBuf::from("/home/am/.config/github-copilot")));
 
@@ -1268,16 +1363,19 @@ mod tests {
     }
 
     #[test]
-    fn resolve_agent_auth_mount_gemini_returns_dot_gemini() {
+    fn resolve_agent_auth_gemini_returns_dot_gemini() {
         let _g = lock_env();
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
-        let mounts = resolve_agent_auth_mount(KnownAgent::Gemini, "am");
-        assert_eq!(mounts.len(), 1);
-        assert_eq!(mounts[0].host_path, tmp.path().join(".gemini"));
-        assert_eq!(mounts[0].container_path, PathBuf::from("/home/am/.gemini"));
-        assert_eq!(mounts[0].mode, MountMode::ReadOnly);
+        let auth_mounts = resolve_agent_auth_mounts(KnownAgent::Gemini, "am").unwrap();
+        assert_eq!(auth_mounts.len(), 1);
+        assert_eq!(auth_mounts[0].host_path, tmp.path().join(".gemini"));
+        assert_eq!(
+            auth_mounts[0].container_path,
+            PathBuf::from("/home/am/.gemini")
+        );
+        assert_eq!(auth_mounts[0].mode, MountMode::ReadOnly);
 
         std::env::remove_var("HOME");
     }
@@ -1288,7 +1386,9 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
-        assert!(resolve_agent_auth_mount(KnownAgent::Codex, "am").is_empty());
+        assert!(resolve_agent_auth_mounts(KnownAgent::Codex, "am")
+            .unwrap()
+            .is_empty());
 
         std::env::remove_var("HOME");
     }

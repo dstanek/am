@@ -50,15 +50,17 @@ pub fn is_in_tmux() -> bool {
 /// `tmux new-window -n <window_name> -c <working_dir>`
 pub fn create_window(window_name: &str, working_dir: &Path) -> Result<()> {
     let bin = tmux_bin()?;
-    run_tmux(&bin, &[
-        "new-window",
-        "-n",
-        window_name,
-        "-c",
-        &working_dir.to_string_lossy(),
-    ])
+    run_tmux(
+        &bin,
+        &[
+            "new-window",
+            "-n",
+            window_name,
+            "-c",
+            &working_dir.to_string_lossy(),
+        ],
+    )
 }
-
 
 /// Split an existing window.
 /// Horizontal: `tmux split-window -h -p <new_pane_percent> -c <working_dir> -t <window_name>`
@@ -68,20 +70,31 @@ pub fn create_window(window_name: &str, working_dir: &Path) -> Result<()> {
 /// The caller is responsible for mapping the logical agent/shell pane assignment to the
 /// correct percentage (e.g. if the agent is in the new pane, pass `split_percent` directly;
 /// if the agent is in the original pane, pass `100 - split_percent`).
-pub fn split_window(window_name: &str, working_dir: &Path, direction: &SplitDirection, new_pane_percent: u8) -> Result<()> {
+pub fn split_window(
+    window_name: &str,
+    working_dir: &Path,
+    direction: &SplitDirection,
+    new_pane_percent: u8,
+) -> Result<()> {
     let bin = tmux_bin()?;
     let flag = match direction {
         SplitDirection::Horizontal => "-h",
         SplitDirection::Vertical => "-v",
     };
     let percent = new_pane_percent.to_string();
-    run_tmux(&bin, &[
-        "split-window",
-        flag,
-        "-p", &percent,
-        "-c", &working_dir.to_string_lossy(),
-        "-t", window_name,
-    ])
+    run_tmux(
+        &bin,
+        &[
+            "split-window",
+            flag,
+            "-p",
+            &percent,
+            "-c",
+            &working_dir.to_string_lossy(),
+            "-t",
+            window_name,
+        ],
+    )
 }
 
 /// `tmux select-pane -t <target>`
@@ -179,7 +192,11 @@ mod tests {
             let bin = make_mock_tmux(tmp.path());
             std::env::set_var("AM_TMUX_BIN", &bin);
             std::env::set_var("MOCK_TMUX_LOG", &log);
-            Self { _tmp: tmp, log, _guard: guard }
+            Self {
+                _tmp: tmp,
+                log,
+                _guard: guard,
+            }
         }
 
         fn captured(&self) -> String {
@@ -227,7 +244,10 @@ mod tests {
         let mock = MockTmux::new();
         create_window("am-feat", Path::new("/tmp/worktree")).unwrap();
         let out = mock.captured();
-        assert!(out.contains("new-window"), "expected new-window, got: {out}");
+        assert!(
+            out.contains("new-window"),
+            "expected new-window, got: {out}"
+        );
         assert!(out.contains("-n"), "expected -n flag");
         assert!(out.contains("am-feat"));
         assert!(out.contains("/tmp/worktree"));
@@ -236,7 +256,13 @@ mod tests {
     #[test]
     fn split_window_horizontal_sends_correct_command() {
         let mock = MockTmux::new();
-        split_window("am-feat", Path::new("/tmp/worktree"), &SplitDirection::Horizontal, 50).unwrap();
+        split_window(
+            "am-feat",
+            Path::new("/tmp/worktree"),
+            &SplitDirection::Horizontal,
+            50,
+        )
+        .unwrap();
         let out = mock.captured();
         assert!(out.contains("split-window"));
         assert!(out.contains("-h"));
@@ -246,7 +272,13 @@ mod tests {
     #[test]
     fn split_window_vertical_sends_correct_command() {
         let mock = MockTmux::new();
-        split_window("am-feat", Path::new("/tmp/worktree"), &SplitDirection::Vertical, 50).unwrap();
+        split_window(
+            "am-feat",
+            Path::new("/tmp/worktree"),
+            &SplitDirection::Vertical,
+            50,
+        )
+        .unwrap();
         let out = mock.captured();
         assert!(out.contains("split-window"));
         assert!(out.contains("-v"));
@@ -255,7 +287,13 @@ mod tests {
     #[test]
     fn split_window_passes_percent_flag() {
         let mock = MockTmux::new();
-        split_window("am-feat", Path::new("/tmp/worktree"), &SplitDirection::Horizontal, 30).unwrap();
+        split_window(
+            "am-feat",
+            Path::new("/tmp/worktree"),
+            &SplitDirection::Horizontal,
+            30,
+        )
+        .unwrap();
         let out = mock.captured();
         assert!(out.contains("-p"), "expected -p flag, got: {out}");
         assert!(out.contains("30"), "expected percent value 30, got: {out}");

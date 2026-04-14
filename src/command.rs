@@ -5,11 +5,7 @@ use anyhow::Result;
 
 /// Shared output-checking logic: returns an error if the command failed,
 /// otherwise returns stdout bytes for the caller to interpret.
-fn check_output<E>(
-    display: &str,
-    output: Output,
-    error_fn: impl Fn(String) -> E,
-) -> Result<Vec<u8>>
+fn check_output<E>(display: &str, output: Output, error_fn: impl Fn(String) -> E) -> Result<Vec<u8>>
 where
     E: Error + Send + Sync + 'static,
 {
@@ -66,11 +62,7 @@ where
 ///
 /// The `error_fn` closure is called to construct an error if the command
 /// fails, allowing each caller to produce their own error type.
-pub fn run_command<E>(
-    bin: &str,
-    args: &[&str],
-    error_fn: impl Fn(String) -> E,
-) -> Result<()>
+pub fn run_command<E>(bin: &str, args: &[&str], error_fn: impl Fn(String) -> E) -> Result<()>
 where
     E: Error + Send + Sync + 'static,
 {

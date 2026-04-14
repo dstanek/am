@@ -144,7 +144,7 @@ am start feat --team --agent claude   # future
 
 ## Agent integrations
 
-`am` has built-in **agent integrations** for the most popular coding agents. Activating an integration (via `defaults.agent` in config or `--agent` on the command line) tells `am` to automatically mount that agent's credentials from your host into the container at runtime. The agent selection also determines the container image — `am` ships with built-in image defaults for `claude` and `copilot`, and you can configure images for any agent under `[agents.<name>]`.
+`am` has built-in **agent integrations** for the most popular coding agents. Activating an integration (via `defaults.agent` in config or `--agent` on the command line) tells `am` to automatically provide that agent's credentials to the container at runtime, either by mounting host paths or by injecting required environment variables. The agent selection also determines the container image — `am` ships with built-in image defaults for `claude` and `copilot`, and you can configure images for any agent under `[agents.<name>]`.
 
 | Agent | What gets mounted | Status |
 |---|---|---|

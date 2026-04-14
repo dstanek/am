@@ -29,10 +29,14 @@ pub enum AmError {
     #[error("no container image configured — set an agent with `--agent` or `defaults.agent` in config (image is selected automatically), or set `container.image` for a custom image")]
     ContainerImageNotConfigured,
 
-    #[error("--auto requires container isolation; --no-container and --auto cannot be used together")]
+    #[error(
+        "--auto requires container isolation; --no-container and --auto cannot be used together"
+    )]
     AutoRequiresContainer,
 
-    #[error("--auto requires an agent; set one with --agent or configure `agent` in .am/config.toml")]
+    #[error(
+        "--auto requires an agent; set one with --agent or configure `agent` in .am/config.toml"
+    )]
     AutoRequiresAgent,
 
     #[error("container error: {0}")]

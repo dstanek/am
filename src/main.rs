@@ -25,9 +25,12 @@ fn main() {
 fn run(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
         Commands::Init => cmd_init(),
-        Commands::Start { slug, agent, no_container, auto } => {
-            cmd_start(&slug, agent.as_deref(), no_container, auto)
-        }
+        Commands::Start {
+            slug,
+            agent,
+            no_container,
+            auto,
+        } => cmd_start(&slug, agent.as_deref(), no_container, auto),
         Commands::List => cmd_list(),
         Commands::Attach { slug } => cmd_attach(&slug),
         Commands::Run { slug, agent } => cmd_run(&slug, &agent),
@@ -72,7 +75,9 @@ fn cmd_init() -> anyhow::Result<()> {
     let gitignore_path = repo_root.join(".gitignore");
     let already_ignored = if gitignore_path.exists() {
         let content = std::fs::read_to_string(&gitignore_path)?;
-        content.lines().any(|l| l.trim() == ".am/" || l.trim() == ".am")
+        content
+            .lines()
+            .any(|l| l.trim() == ".am/" || l.trim() == ".am")
     } else {
         false
     };
@@ -91,7 +96,12 @@ fn cmd_init() -> anyhow::Result<()> {
 
 // ── am start ──────────────────────────────────────────────────────────────────
 
-fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: bool) -> anyhow::Result<()> {
+fn cmd_start(
+    slug: &str,
+    agent_flag: Option<&str>,
+    no_container: bool,
+    auto: bool,
+) -> anyhow::Result<()> {
     let (repo_root, vcs) = find_repo_root()?;
     let sessions = session::load_sessions(&repo_root)?;
 
@@ -143,10 +153,11 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
     // 5. Container config
     let use_container = cfg.container.enabled && !no_container;
     let (_runtime, container_cmd, session_container) = if use_container {
-        // Credential check only applies when container will mount them
-        if let Some(agent) = effective_known_agent {
-            container::validate_agent_credentials(agent)?;
-        }
+        let agent_auth = if let Some(agent) = effective_known_agent {
+            container::preflight_agent_auth(agent, &cfg.container.user)?
+        } else {
+            container::AgentAuth::default()
+        };
 
         let image = config::resolve_image(effective_agent.as_deref(), &cfg)
             .ok_or(error::AmError::ContainerImageNotConfigured)?;
@@ -160,23 +171,18 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
             slug,
             &repo_root,
             &vcs,
-            effective_known_agent,
+            agent_auth.mounts.clone(),
             cfg.container.gitconfig.as_deref(),
             cfg.container.ssh.as_deref(),
             &cfg.container.user,
         )?;
 
-        let extra_env = if let Some(agent) = effective_known_agent {
-            container::agent_extra_env(agent)?
-        } else {
-            vec![]
-        };
         let mut cmd = container::build_run_command(
             &runtime,
             image,
             &mounts,
             &cfg.container.env,
-            &extra_env,
+            &agent_auth.env,
             &cfg.container.network,
             &format!("am-{slug}"),
         );
@@ -211,7 +217,7 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
     // The -p percent controls the size of the new pane.
     let (agent_pane_idx, shell_pane_idx, new_pane_percent) = match cfg.tmux.agent_pane {
         config::PaneSide::Right => (1usize, 0usize, cfg.tmux.split_percent),
-        config::PaneSide::Left  => (0usize, 1usize, 100 - cfg.tmux.split_percent),
+        config::PaneSide::Left => (0usize, 1usize, 100 - cfg.tmux.split_percent),
     };
 
     let (original_window_name, original_shell_dir) = if tmux::is_in_tmux() {
@@ -222,9 +228,17 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
             .map_err(|e| anyhow::anyhow!(
                 "{e}\nHint: a window named '{window_name}' may already exist — run 'am destroy {slug}' first"
             ))?;
-        tmux::split_window(&window_name, &worktree_path, &cfg.tmux.split, new_pane_percent)?;
+        tmux::split_window(
+            &window_name,
+            &worktree_path,
+            &cfg.tmux.split,
+            new_pane_percent,
+        )?;
         if let Some(ref cmd) = container_cmd {
-            tmux::send_keys(&tmux::get_pane_id(&window_name, agent_pane_idx), &cmd.join(" "))?;
+            tmux::send_keys(
+                &tmux::get_pane_id(&window_name, agent_pane_idx),
+                &cmd.join(" "),
+            )?;
         } else if let Some(ref agent) = effective_agent {
             tmux::send_keys(&tmux::get_pane_id(&window_name, agent_pane_idx), agent)?;
         }
@@ -273,18 +287,21 @@ fn cmd_start(slug: &str, agent_flag: Option<&str>, no_container: bool, auto: boo
             #[cfg(unix)]
             {
                 use std::os::unix::process::CommandExt;
-                let err = std::process::Command::new(&cmd[0])
-                    .args(&cmd[1..])
-                    .exec();
+                let err = std::process::Command::new(&cmd[0]).args(&cmd[1..]).exec();
                 // exec() only returns on failure
-                return Err(error::AmError::ContainerError(format!("failed to exec container: {err}")).into());
+                return Err(error::AmError::ContainerError(format!(
+                    "failed to exec container: {err}"
+                ))
+                .into());
             }
             #[cfg(not(unix))]
             {
                 let status = std::process::Command::new(&cmd[0])
                     .args(&cmd[1..])
                     .status()
-                    .map_err(|e| error::AmError::ContainerError(format!("failed to run container: {e}")))?;
+                    .map_err(|e| {
+                        error::AmError::ContainerError(format!("failed to run container: {e}"))
+                    })?;
                 std::process::exit(status.code().unwrap_or(1));
             }
         }
@@ -312,8 +329,18 @@ fn cmd_list() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let slug_w = sessions.iter().map(|s| s.slug.len()).max().unwrap_or(4).max(4);
-    let path_w = sessions.iter().map(|s| s.vcs.worktree_path.display().to_string().len()).max().unwrap_or(8).max(8);
+    let slug_w = sessions
+        .iter()
+        .map(|s| s.slug.len())
+        .max()
+        .unwrap_or(4)
+        .max(4);
+    let path_w = sessions
+        .iter()
+        .map(|s| s.vcs.worktree_path.display().to_string().len())
+        .max()
+        .unwrap_or(8)
+        .max(8);
 
     println!(
         "{:<slug_w$}  {:<9}  {:<4}  {:<path_w$}  {:<10}  CREATED",
@@ -322,7 +349,11 @@ fn cmd_list() -> anyhow::Result<()> {
     println!("{}", "-".repeat(slug_w + 9 + 4 + path_w + 10 + 19 + 10));
 
     for s in &sessions {
-        let container = s.container.as_ref().map(|c| c.runtime.as_str()).unwrap_or("—");
+        let container = s
+            .container
+            .as_ref()
+            .map(|c| c.runtime.as_str())
+            .unwrap_or("—");
         let auto = if s.auto { "yes" } else { "—" };
         let created = s.created_at.format("%Y-%m-%d %H:%M").to_string();
         println!(
@@ -366,9 +397,14 @@ fn cmd_attach(slug: &str) -> anyhow::Result<()> {
             ))?;
         let (shell_pane_idx, new_pane_percent) = match cfg.tmux.agent_pane {
             config::PaneSide::Right => (0usize, cfg.tmux.split_percent),
-            config::PaneSide::Left  => (1usize, 100 - cfg.tmux.split_percent),
+            config::PaneSide::Left => (1usize, 100 - cfg.tmux.split_percent),
         };
-        tmux::split_window(&window_name, &s.vcs.worktree_path, &cfg.tmux.split, new_pane_percent)?;
+        tmux::split_window(
+            &window_name,
+            &s.vcs.worktree_path,
+            &cfg.tmux.split,
+            new_pane_percent,
+        )?;
         tmux::select_pane(&tmux::get_pane_id(&window_name, shell_pane_idx))?;
         tmux::select_window(&window_name)?;
         println!("Opened new window for session '{slug}'.");
@@ -411,7 +447,9 @@ fn cmd_destroy(slug: &str, force: bool) -> anyhow::Result<()> {
         if matches!(vcs, config::Vcs::Git)
             && worktree::git_worktree_has_changes(&s.vcs.worktree_path)
         {
-            eprintln!("\x1b[31mWarning: the worktree has uncommitted changes that will be lost.\x1b[0m");
+            eprintln!(
+                "\x1b[31mWarning: the worktree has uncommitted changes that will be lost.\x1b[0m"
+            );
         }
         print!("Remove worktree and kill tmux window for '{slug}'? [y/N] ");
         std::io::stdout().flush()?;
@@ -503,7 +541,6 @@ fn read_git_config(key: &str) -> Option<String> {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
 }
-
 
 fn find_repo_root() -> anyhow::Result<(PathBuf, config::Vcs)> {
     let mut dir = std::env::current_dir()?;

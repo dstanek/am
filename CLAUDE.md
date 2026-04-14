@@ -20,6 +20,7 @@ make build-copilot       # Build Copilot Docker image
 
 **Modules:**
 - `cli.rs` — clap CLI; slug validation (1–40 chars, lowercase/digits/hyphens/underscores)
+- `command.rs` — subprocess helpers (`run_command`, `run_built_command`, and output variants); shared stderr/status error formatting
 - `config.rs` — layered config: CLI flags → env vars → `.am/config.toml` → `~/.config/am/config.toml` → defaults
 - `error.rs` — `AmError` enum via `thiserror`; all functions return `anyhow::Result<T>`
 - `session.rs` — session CRUD; state in `.am/sessions.json`
@@ -32,7 +33,7 @@ make build-copilot       # Build Copilot Docker image
 
 **Container mounts:** both git and jj repos mirror the host path structure inside the container (worktree and VCS dirs are mounted at the same absolute paths). No `GIT_DIR`/`GIT_WORK_TREE` env vars are injected. See `container.rs`.
 
-**Agent auth presets** (`claude`, `copilot`, `gemini`, `codex`) mount credentials at runtime. Unknown agent names are rejected early with a clear error listing valid agents.
+**Agent auth presets** (`claude`, `copilot`, `gemini`, `codex`) provide credentials at runtime via mounts and/or environment variables. Unknown agent names are rejected early with a clear error listing valid agents.
 
 ## Testing
 

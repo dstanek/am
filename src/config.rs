@@ -59,7 +59,10 @@ pub struct AgentSettings {
 pub struct TmuxConfig {
     pub agent_pane: PaneSide,
     pub split: SplitDirection,
-    #[serde(deserialize_with = "deserialize_split_percent", serialize_with = "serialize_split_percent")]
+    #[serde(
+        deserialize_with = "deserialize_split_percent",
+        serialize_with = "serialize_split_percent"
+    )]
     pub split_percent: u8,
 }
 
@@ -80,7 +83,7 @@ where
     let val = u8::deserialize(deserializer)?;
     if !(1..=99).contains(&val) {
         return Err(serde::de::Error::custom(
-            "split_percent must be between 1 and 99 (percentage of window for agent pane)"
+            "split_percent must be between 1 and 99 (percentage of window for agent pane)",
         ));
     }
     Ok(val)
@@ -138,7 +141,14 @@ fn default_agent_images() -> HashMap<String, AgentSettings> {
         ("copilot", "ghcr.io/dstanek/am-copilot-minimal:latest"),
     ]
     .into_iter()
-    .map(|(k, v)| (k.to_string(), AgentSettings { image: Some(v.to_string()) }))
+    .map(|(k, v)| {
+        (
+            k.to_string(),
+            AgentSettings {
+                image: Some(v.to_string()),
+            },
+        )
+    })
     .collect()
 }
 
@@ -273,8 +283,8 @@ fn apply_file_config(base: &mut Config, file: FileConfig) {
 fn parse_config_file(path: &Path) -> Result<FileConfig> {
     let text = std::fs::read_to_string(path)
         .with_context(|| format!("reading config file {}", path.display()))?;
-    let file: FileConfig = toml::from_str(&text)
-        .with_context(|| format!("parsing config file {}", path.display()))?;
+    let file: FileConfig =
+        toml::from_str(&text).with_context(|| format!("parsing config file {}", path.display()))?;
     Ok(file)
 }
 
@@ -472,7 +482,10 @@ fn validate_env_passthrough(env: &[String]) -> Result<()> {
     for entry in env {
         let name = entry.split('=').next().unwrap_or("");
         let valid = !name.is_empty()
-            && name.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            && name
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
             && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
         if !valid {
             return Err(anyhow::anyhow!(
@@ -487,7 +500,10 @@ fn validate_env_passthrough(env: &[String]) -> Result<()> {
 
 fn validate_container_user(user: &str) -> Result<()> {
     let valid = !user.is_empty()
-        && user.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c == '_')
+        && user
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_lowercase() || c == '_')
         && user
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-');
@@ -499,7 +515,10 @@ fn validate_container_user(user: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn load_with_global(global_path: Option<&Path>, project_config_path: Option<&Path>) -> Result<Config> {
+pub fn load_with_global(
+    global_path: Option<&Path>,
+    project_config_path: Option<&Path>,
+) -> Result<Config> {
     let mut config = Config::default();
 
     // Apply global config if it exists
@@ -546,7 +565,8 @@ mod tests {
         let nonexistent_global = tmp.path().join("global.toml");
         let nonexistent_project = tmp.path().join("project.toml");
 
-        let config = load_with_global(Some(&nonexistent_global), Some(&nonexistent_project)).unwrap();
+        let config =
+            load_with_global(Some(&nonexistent_global), Some(&nonexistent_project)).unwrap();
 
         assert_eq!(config.vcs, Vcs::Git);
         assert!(config.agent.is_none());
@@ -560,7 +580,10 @@ mod tests {
             Some("ghcr.io/dstanek/am-claude-minimal:latest")
         );
         assert_eq!(
-            config.agents.get("copilot").and_then(|a| a.image.as_deref()),
+            config
+                .agents
+                .get("copilot")
+                .and_then(|a| a.image.as_deref()),
             Some("ghcr.io/dstanek/am-copilot-minimal:latest")
         );
     }
@@ -571,19 +594,27 @@ mod tests {
         std::env::remove_var("AM_AGENT");
         let tmp = TempDir::new().unwrap();
 
-        let global_path = write_toml(tmp.path(), "global.toml", r#"
+        let global_path = write_toml(
+            tmp.path(),
+            "global.toml",
+            r#"
 [defaults]
 agent = "codex"
 [container]
 image = "global-image"
-"#);
+"#,
+        );
 
-        let project_path = write_toml(tmp.path(), "project.toml", r#"
+        let project_path = write_toml(
+            tmp.path(),
+            "project.toml",
+            r#"
 [defaults]
 agent = "claude"
 [container]
 image = "project-image"
-"#);
+"#,
+        );
 
         let config = load_with_global(Some(&global_path), Some(&project_path)).unwrap();
 
@@ -597,18 +628,26 @@ image = "project-image"
         std::env::remove_var("AM_AGENT");
         let tmp = TempDir::new().unwrap();
 
-        let global_path = write_toml(tmp.path(), "global.toml", r#"
+        let global_path = write_toml(
+            tmp.path(),
+            "global.toml",
+            r#"
 [defaults]
 agent = "claude"
 [tmux]
 split_percent = 70
-"#);
+"#,
+        );
 
         // Project config only sets image, doesn't touch agent or split_percent
-        let project_path = write_toml(tmp.path(), "project.toml", r#"
+        let project_path = write_toml(
+            tmp.path(),
+            "project.toml",
+            r#"
 [container]
 image = "myimage"
-"#);
+"#,
+        );
 
         let config = load_with_global(Some(&global_path), Some(&project_path)).unwrap();
 
@@ -647,12 +686,16 @@ image = "myimage"
         let _guard = ENV_MUTEX.lock().unwrap();
         let tmp = TempDir::new().unwrap();
 
-        let project_path = write_toml(tmp.path(), "project.toml", r#"
+        let project_path = write_toml(
+            tmp.path(),
+            "project.toml",
+            r#"
 [defaults]
 agent = "claude"
 [container]
 image = "project-image"
-"#);
+"#,
+        );
 
         std::env::set_var("AM_AGENT", "codex");
         std::env::set_var("AM_CONTAINER_IMAGE", "env-image");
@@ -684,7 +727,10 @@ image = "project-image"
         let mut config = Config::default();
         config.container.image = Some("custom-image:v1".to_string());
         // container.image takes priority over agent mapping
-        assert_eq!(resolve_image(Some("claude"), &config), Some("custom-image:v1"));
+        assert_eq!(
+            resolve_image(Some("claude"), &config),
+            Some("custom-image:v1")
+        );
     }
 
     #[test]
@@ -700,10 +746,14 @@ image = "project-image"
         std::env::remove_var("AM_AGENT");
         let tmp = TempDir::new().unwrap();
 
-        let project_path = write_toml(tmp.path(), "project.toml", r#"
+        let project_path = write_toml(
+            tmp.path(),
+            "project.toml",
+            r#"
 [agents.claude]
 image = "myorg/am-claude:custom"
-"#);
+"#,
+        );
 
         let config = load_with_global(None, Some(&project_path)).unwrap();
 
@@ -713,7 +763,10 @@ image = "myorg/am-claude:custom"
         );
         // copilot default is still present since project config didn't touch it
         assert_eq!(
-            config.agents.get("copilot").and_then(|a| a.image.as_deref()),
+            config
+                .agents
+                .get("copilot")
+                .and_then(|a| a.image.as_deref()),
             Some("ghcr.io/dstanek/am-copilot-minimal:latest")
         );
     }
@@ -724,15 +777,23 @@ image = "myorg/am-claude:custom"
         std::env::remove_var("AM_AGENT");
         let tmp = TempDir::new().unwrap();
 
-        let global_path = write_toml(tmp.path(), "global.toml", r#"
+        let global_path = write_toml(
+            tmp.path(),
+            "global.toml",
+            r#"
 [agents.gemini]
 image = "myorg/am-gemini:latest"
-"#);
+"#,
+        );
 
-        let project_path = write_toml(tmp.path(), "project.toml", r#"
+        let project_path = write_toml(
+            tmp.path(),
+            "project.toml",
+            r#"
 [agents.claude]
 image = "myorg/am-claude:project"
-"#);
+"#,
+        );
 
         let config = load_with_global(Some(&global_path), Some(&project_path)).unwrap();
 
@@ -748,7 +809,10 @@ image = "myorg/am-claude:project"
         );
         // Compiled-in copilot default still present
         assert_eq!(
-            config.agents.get("copilot").and_then(|a| a.image.as_deref()),
+            config
+                .agents
+                .get("copilot")
+                .and_then(|a| a.image.as_deref()),
             Some("ghcr.io/dstanek/am-copilot-minimal:latest")
         );
     }
@@ -775,7 +839,10 @@ image = "myorg/am-claude:project"
         std::env::set_var("HOME", tmp.path());
 
         let path = global_config_path();
-        assert_eq!(path, Some(tmp.path().join(".config").join("am").join("config.toml")));
+        assert_eq!(
+            path,
+            Some(tmp.path().join(".config").join("am").join("config.toml"))
+        );
 
         std::env::remove_var("HOME");
     }
@@ -789,7 +856,8 @@ image = "myorg/am-claude:project"
             "FOO=bar".to_string(),
             "_UNDERSCORE_START".to_string(),
             "LOWER_case=value".to_string(),
-        ]).is_ok());
+        ])
+        .is_ok());
     }
 
     #[test]
@@ -813,10 +881,14 @@ image = "myorg/am-claude:project"
     #[test]
     fn load_with_global_errors_on_bad_env_entry() {
         let tmp = TempDir::new().unwrap();
-        let project = write_toml(tmp.path(), "config.toml", r#"
+        let project = write_toml(
+            tmp.path(),
+            "config.toml",
+            r#"
 [container]
 env = ["--rm"]
-"#);
+"#,
+        );
         let err = load_with_global(None, Some(&project)).unwrap_err();
         assert!(err.to_string().contains("--rm"));
     }
@@ -839,10 +911,14 @@ env = ["--rm"]
     #[test]
     fn load_with_global_errors_on_invalid_container_user_in_file() {
         let tmp = TempDir::new().unwrap();
-        let project = write_toml(tmp.path(), "config.toml", r#"
+        let project = write_toml(
+            tmp.path(),
+            "config.toml",
+            r#"
 [container]
 user = "../root"
-"#);
+"#,
+        );
         let err = load_with_global(None, Some(&project)).unwrap_err();
         assert!(err.to_string().contains("../root"));
     }
