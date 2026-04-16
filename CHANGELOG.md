@@ -1,3 +1,40 @@
+## [0.5.0] - 2026-04-16
+
+### 🚀 Features
+
+- *(container)* Make container user configurable
+- *(container)* Implement OPENAI_API_KEY injection for Codex agent
+
+### 🐛 Bug Fixes
+
+- *(release)* Create Homebrew tap PR via REST API
+- Address code review findings across multiple modules
+- *(container)* Use Display instead of Debug for RuntimeKind serialization
+- *(cli)* Enforce slug must start with a letter or digit
+- *(tmux)* Validate AM_TMUX_BIN override exists before using it
+- *(config)* Validate container.env entries at config load time
+
+### 🚜 Refactor
+
+- *(main)* Eliminate duplicated Session construction in cmd_start
+- *(container)* Introduce KnownAgent enum for compile-time agent enforcement
+- *(worktree)* Resolve git binary once per public function
+- *(tmux,worktree)* Resolve binary once per public function
+- *(command)* Add run_built_command variants; inline path args in run_git
+- *(worktree)* Inline path args in git_worktree_has_changes
+
+### 📚 Documentation
+
+- Correct container mount layout description in CLAUDE.md and specs/v1.md
+- Remove stale startup_delay_ms and GIT_DIR references from docs
+- *(configuration)* Add missing container settings to reference table
+- *(backlog)* Update Codex and Gemini integration status
+- *(claude)* Add command.rs to Architecture module list
+- *(specs)* Sync v1.md with current implementation
+
+### 🎨 Styling
+
+- *(error)* Remove extra blank line in error.rs
 ## [0.4.0] - 2026-04-12
 
 ### 🚀 Features
@@ -34,6 +71,7 @@
 - Remove aider agent — no plans to implement
 - Sync version to 0.3.0 and update installation docs
 - *(worktree)* Make binary resolution robust in worktree copy
+- *(release)* V0.4.0
 ## [0.3.0] - 2026-04-11
 
 ### 🚀 Features
